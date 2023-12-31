@@ -280,8 +280,8 @@ function handleGetUserMediaError(e) {
 // when the user hangs up, the other user hangs up, or if a connection
 // failure is detected.
 
-function closeVideoCall() {
-  var localVideo = document.getElementById("local_video");
+export function closeVideoCall() {
+  //var localVideo = document.getElementById("local_video");
 
   console.log("Closing the call");
 
@@ -305,17 +305,6 @@ function closeVideoCall() {
     myPeerConnection.getTransceivers().forEach(transceiver => {
       transceiver.stop();
     });
-
-    // Stop the webcam preview as well by pausing the <video>
-    // element, then stopping each of the getUserMedia() tracks
-    // on it.
-
-    if (localVideo.srcObject) {
-      localVideo.pause();
-      localVideo.srcObject.getTracks().forEach(track => {
-        track.stop();
-      });
-    }
 
     // Close the peer connection
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import {
+  closeVideoCall,
   handleHangUpMsg,
   handleNewICECandidateMsg,
   handleVideoAnswerMsg,
@@ -20,13 +21,32 @@ function App () {
   const strangerCam = useRef<HTMLVideoElement | null>(null);
   const [text, setText] = useState<string[]>([]);
   const [username, setUsername] = useState<string>('');
+  const [strangerUsername, setStrangerUsername] = useState<string>('');
   const [onlineUsers, setOnlineUsers] = useState([]);
+
+  const hangUpCall = () => {
+    closeVideoCall();
+
+    if (localCam.current.srcObject) {
+      localCam.current.pause();
+      localCam.current.srcObject.getTracks().forEach(track => {
+        track.stop();
+      });
+    }
+
+    sendToServer(ws.current,{
+      name: username,
+      target: strangerUsername,
+      type: "hang-up"
+    });
+  }
 
   const onTrack = (event) => {
     strangerCam.current.srcObject = event.streams[0];
   }
 
   const sendInvitation = async (username: string) => {
+    setStrangerUsername(username);
     (localCam.current as HTMLVideoElement).srcObject = await invite(username);
   }
 
@@ -129,19 +149,20 @@ function App () {
       <h1>Chat</h1>
       <p>Click a username in the user list to ask them to enter a one-on-one video chat with you.</p>
       <p>Enter a username:
-        <input style={{padding:'5px', marginLeft:'5px'}} type="text" value={username} onChange={e => setUsername(e.target.value)} />
-        <button style={{margin:'10px', backgroundColor:'#EEEEEE'}} onClick={connect}>Connect</button>
+        <input style={{padding: '5px', marginLeft: '5px'}} type="text" value={username} onChange={e => setUsername(e.target.value)}/>
+        <button onClick={connect}>Connect</button>
       </p>
+      <button onClick={hangUpCall}>Hang up</button>
       <div className="camerabox">
-        <video style={{border: '1px solid blue', marginRight:'10px'}} ref={strangerCam} autoPlay></video>
-        <video style={{border: '1px solid green'}} ref={localCam} autoPlay></video>
+        <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
+        <video style={{border: '3px solid green'}} ref={localCam} autoPlay></video>
       </div>
 
       <div id="onlineUsers">
         <ul>
-        {onlineUsers.map(user => (
-          <li onClick={() => sendInvitation(user)}>{user}</li>
-        ))}
+          {onlineUsers.map(user => (
+            <li onClick={() => sendInvitation(user)}>{user}</li>
+          ))}
         </ul>
       </div>
 

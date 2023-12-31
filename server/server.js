@@ -22,10 +22,9 @@ wsServer = new WebSocketServer({
   autoAcceptConnections: false
 });
 
-const connectionArray = [];
+let connectionArray = [];
 let nextID = 1;
 let appendToMakeUnique = 1;
-
 
 // Scan the list of connections and return the one for the specified
 // clientID. Each login gets an ID that doesn't change during the session,
@@ -193,7 +192,23 @@ wsServer.on('request', function(request) {
       }
     }
   });
-  connection.on('close', function(reasonCode, description) {
+  connection.on('close', function(reason, description) {
+    connectionArray = connectionArray.filter(function(el, idx, ar) {
+      return el.connected;
+    });
+
+    // Now send the updated user list. Again, please don't do this in a
+    // real application. Your users won't like you very much.
+    sendUserListToAll();
+
+    // Build and output log output for close information.
+
+    var logMessage = "Connection closed: " + connection.remoteAddress + " (" +
+      reason;
+    if (description !== null && description.length !== 0) {
+      logMessage += ": " + description;
+    }
+
     console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
   });
 });
