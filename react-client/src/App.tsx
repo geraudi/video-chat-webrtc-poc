@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import {
-  closeVideoCall,
-  handleHangUpMsg,
   handleNewICECandidateMsg,
   handleVideoAnswerMsg,
   handleVideoOfferMsg,
+  hangUpCall,
   invite,
-  mediaConstraints,
-  setMyUsername,
+  mediaConstraints, sendToServer,
+  setMyUsername, setOnCloseVideoCallback,
   setOnTrackCallBack,
-  setSendToServer
+  setWs
 } from './rtc.ts';
-import { Message, sendToServer } from './webSocket.ts';
 
 let clientID = 0;
 
@@ -22,28 +20,13 @@ function App () {
   const strangerCam = useRef<HTMLVideoElement | null>(null);
   const [text, setText] = useState<string[]>([]);
   const [username, setUsername] = useState<string>('');
-  const [strangerUsername, setStrangerUsername] = useState<string>('');
   const [onlineUsers, setOnlineUsers] = useState([]);
 
-  const hangUpCall = () => {
-    closeVideoCall();
-
-    if (localCam.current?.srcObject) {
-      localCam.current.pause();
-      (localCam.current.srcObject as MediaStream).getTracks().forEach(track => {
-        track.stop();
-      });
+  const onCloseVideo = () => {
+    if (strangerCam.current) {
+      strangerCam.current.srcObject = null;
+      strangerCam.current.src = '';
     }
-
-    if (ws.current === undefined) {
-      return;
-    }
-
-    sendToServer(ws.current, {
-      name: username,
-      target: strangerUsername,
-      type: 'hang-up'
-    });
   };
 
   const onTrack = (event: RTCTrackEvent) => {
@@ -53,7 +36,6 @@ function App () {
   };
 
   const sendInvitation = async (username: string) => {
-    setStrangerUsername(username);
     await invite(username, (localCam.current as HTMLVideoElement).srcObject as MediaStream);
   };
 
@@ -66,9 +48,9 @@ function App () {
     (localCam.current as HTMLVideoElement).srcObject = myStream;
 
     ws.current = new WebSocket('ws://localhost:6503', ['json']);
-
+    setWs(ws.current);
     setOnTrackCallBack(onTrack);
-    setSendToServer(((msg: Message) => sendToServer(ws.current as WebSocket, msg)));
+    setOnCloseVideoCallback(onCloseVideo);
 
     ws.current.onopen = (event) => {
       console.log('WebSocket Client Connected', event);
@@ -91,7 +73,7 @@ function App () {
           clientID = msg.id;
           console.log(clientID);
           setMyUsername(username);
-          sendToServer(ws.current as WebSocket, {
+          sendToServer({
             name: username,
             date: Date.now(),
             id: clientID,
@@ -118,7 +100,6 @@ function App () {
         // call.
 
         case 'video-offer':  // Invitation and offer to chat
-          console.log('Received video chat offer from ' + msg.name);
           await handleVideoOfferMsg(msg, myStream);
           break;
 
@@ -131,11 +112,8 @@ function App () {
           break;
 
         case 'hang-up': // The other peer has hung up the call
-          handleHangUpMsg(msg);
           break;
       }
-
-      console.log(text);
     };
   };
 
@@ -154,7 +132,7 @@ function App () {
       </p>
       <button onClick={hangUpCall}>Hang up</button>
       <div className="camerabox">
-        <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
+          <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
         <video style={{border: '3px solid green'}} ref={localCam} autoPlay></video>
       </div>
 
