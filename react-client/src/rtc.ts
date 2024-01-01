@@ -4,15 +4,22 @@
 // use in our video call. Then we configure event handlers to get
 // needed notifications on the call.
 
-import { Message } from './webSocket.ts';
+import {
+  HangUpMessage,
+  Message,
+  NewIceCandidateMessage,
+  ReceiveVideoOffertMessage,
+  SendVideoOffertMessage,
+  VideoAnswerMessage
+} from './messages.ts';
 
 let ws: WebSocket;
 let strangerStream: MediaStream | null = null;
-let myUsername: string | null = null;
-let strangerUsername: string | null = null;      // To store username of other peer
+let myId: string | null = null;
+let strangerId: string | null = null;      // To store username of other peer
 let myPeerConnection: RTCPeerConnection | null = null;    // RTCPeerConnection
 
-export const setMyUsername = (username: string) => myUsername = username;
+export const setMyId = (id: string) => myId = id;
 export const setWs = (webSock: WebSocket) => ws = webSock;
 
 export function sendToServer (msg: Message) {
@@ -58,12 +65,11 @@ console.log('Hostname: ' + myHostname);
 // a |notificationneeded| event, so we'll let our handler for that
 // make the offer.
 
-export async function invite (clickedUsername: string, stream: MediaStream) {
-  console.log('Starting to prepare an invitation', clickedUsername);
+export async function invite (stream: MediaStream) {
+  console.log('Starting to prepare an invitation to a stranger');
   if (myPeerConnection) {
     alert('You can\'t start a call because you already have one open!');
   } else {
-    strangerUsername = clickedUsername;
 
     await createPeerConnection();
 
@@ -71,10 +77,6 @@ export async function invite (clickedUsername: string, stream: MediaStream) {
     stream
       .getTracks()
       .forEach((track) => (myPeerConnection as RTCPeerConnection).addTrack(track, stream));
-
-    console.log('invite', stream.getTracks().length);
-
-    //myStream = stream;
   }
 }
 
@@ -98,12 +100,13 @@ async function handleNegotiationNeededEvent () {
     await myPeerConnection.setLocalDescription(offer);
 
     console.log('---> Sending the offer to the remote peer');
-    sendToServer({
-      name: myUsername as string,
-      target: strangerUsername as string,
+
+    const videoOffertMessage: SendVideoOffertMessage = {
       type: 'video-offer',
-      sdp: myPeerConnection.localDescription
-    });
+      id: myId as string,
+      sdp: myPeerConnection.localDescription as RTCSessionDescription
+    };
+    sendToServer(videoOffertMessage);
   } catch (err) {
     console.log('*** The following error occurred while handling the negotiationneeded event:');
     reportError(err);
@@ -114,39 +117,45 @@ async function handleNegotiationNeededEvent () {
 // create our RTCPeerConnection, get and attach our local camera
 // stream, then create and send an answer to the caller.
 
-export async function handleVideoOfferMsg (msg: Message, stream: MediaStream) {
+export async function handleVideoOfferMsg (msg: ReceiveVideoOffertMessage, stream: MediaStream) {
   console.log('handleVideoOfferMsg', msg);
-  strangerUsername = msg.name as string;
+  //if (!myId) return;
+
+  strangerId = msg.id;
+  console.log('handleVideoOfferMsg:', strangerId);
   createPeerConnection();
 
-  if (!myPeerConnection) return;
-  if (!msg.sdp) return;
+  if (!myPeerConnection) {
+    throw new Error('myPeerConnection error');
+  };
 
   const desc = new RTCSessionDescription(msg.sdp);
   await myPeerConnection.setRemoteDescription(desc);
 
-  await stream
+  stream
     .getTracks()
     .forEach((track) => (myPeerConnection as RTCPeerConnection).addTrack(track, stream));
-
-  console.log('handleVideoOfferMsg', stream.getTracks().length);
-  //myStream = stream;
 
   const answer = await (myPeerConnection as RTCPeerConnection).createAnswer();
   await (myPeerConnection as RTCPeerConnection).setLocalDescription(answer);
 
-  sendToServer({
-    name: myUsername,
-    target: strangerUsername as string,
+  if (!myPeerConnection.localDescription) {
+    throw new Error('myPeerConnection.localDescription error');
+  }
+
+  const videoAnswerMessage: VideoAnswerMessage = {
     type: 'video-answer',
-    sdp: (myPeerConnection as RTCPeerConnection).localDescription
-  });
+    id: msg.targetId,
+    targetId: strangerId,
+    sdp: myPeerConnection.localDescription
+  };
+  sendToServer(videoAnswerMessage);
 }
 
 // Responds to the "video-answer" message sent to the caller
 // once the callee has decided to accept our request to talk.
-export async function handleVideoAnswerMsg (msg: Message) {
-  if (msg.sdp && myPeerConnection) {
+export async function handleVideoAnswerMsg (msg: VideoAnswerMessage) {
+  if (myPeerConnection) {
     const desc = new RTCSessionDescription(msg.sdp);
     await myPeerConnection.setRemoteDescription(desc).catch(reportError);
   }
@@ -162,11 +171,12 @@ function handleICECandidateEvent (event: RTCPeerConnectionIceEvent) {
   if (event.candidate) {
     console.log('*** Outgoing ICE candidate: ' + event.candidate.candidate);
 
-    sendToServer({
+    const newIceCandidateMessage: NewIceCandidateMessage = {
       type: 'new-ice-candidate',
-      target: strangerUsername as string,
+      targetId: strangerId as string,
       candidate: event.candidate
-    });
+    };
+    sendToServer(newIceCandidateMessage);
   }
 }
 
@@ -176,8 +186,8 @@ function handleICECandidateEvent (event: RTCPeerConnectionIceEvent) {
 // RTCPeerConnection.addIceCandidate() to send it along to the
 // local ICE framework.
 
-export async function handleNewICECandidateMsg (msg: Message) {
-  var candidate = new RTCIceCandidate(msg.candidate);
+export async function handleNewICECandidateMsg (msg: NewIceCandidateMessage) {
+  const candidate = new RTCIceCandidate(msg.candidate);
 
   console.log('*** Adding received ICE candidate: ' + JSON.stringify(candidate));
   try {
@@ -198,11 +208,12 @@ function handleTrackEvent (event: RTCTrackEvent) {
 
 export function hangUpCall () {
   console.log('*** Received hang up notification from other peer');
-  sendToServer({
-    name: myUsername,
-    target: strangerUsername as string,
-    type: 'hang-up'
-  });
+  const hangUpMessage: HangUpMessage = {
+    type: 'hang-up',
+    id: myId as string,
+    targetId: strangerId as string
+  };
+  sendToServer(hangUpMessage);
 
   closeVideoCall();
 }
@@ -211,7 +222,6 @@ export function hangUpCall () {
 
 let onCloseVideoCallback = () => {};
 export const setOnCloseVideoCallback = (callback: () => void) => onCloseVideoCallback = callback;
-
 
 // Close the RTCPeerConnection and reset variables so that the user can
 // make or receive another call if they wish. This is called both
@@ -234,7 +244,6 @@ export function closeVideoCall () {
       transceiver.stop();
     });
 
-
     if (strangerStream) {
       strangerStream.getTracks().forEach((track) => track.stop());
     }
@@ -246,7 +255,7 @@ export function closeVideoCall () {
   }
 
   strangerStream = null;
-  strangerUsername = null;
+  strangerId = null;
 
   onCloseVideoCallback();
 }
@@ -297,7 +306,7 @@ function handleICEGatheringStateChangeEvent () {
   console.log('*** ICE gathering state changed to: ' + myPeerConnection?.iceGatheringState);
 }
 
-async function createPeerConnection () {
+function createPeerConnection () {
   console.log('Setting up a connection...');
 
   // Create an RTCPeerConnection which knows to use our chosen

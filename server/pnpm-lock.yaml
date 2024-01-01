@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  uuid:
+    specifier: ^9.0.1
+    version: 9.0.1
   websocket:
     specifier: ^1.0.34
     version: 1.0.34
@@ -105,6 +108,11 @@ packages:
     requiresBuild: true
     dependencies:
       node-gyp-build: 4.7.1
+    dev: false
+
+  /uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    hasBin: true
     dev: false
 
   /websocket@1.0.34:

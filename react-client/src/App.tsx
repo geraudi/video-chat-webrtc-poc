@@ -6,20 +6,18 @@ import {
   handleVideoOfferMsg,
   hangUpCall,
   invite,
-  mediaConstraints, sendToServer,
-  setMyUsername, setOnCloseVideoCallback,
+  mediaConstraints,
+  setMyId,
+  setOnCloseVideoCallback,
   setOnTrackCallBack,
   setWs
 } from './rtc.ts';
-
-let clientID = 0;
 
 function App () {
   const ws = useRef<WebSocket>();
   const localCam = useRef<HTMLVideoElement | null>(null);
   const strangerCam = useRef<HTMLVideoElement | null>(null);
   const [text, setText] = useState<string[]>([]);
-  const [username, setUsername] = useState<string>('');
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const onCloseVideo = () => {
@@ -35,15 +33,11 @@ function App () {
     }
   };
 
-  const sendInvitation = async (username: string) => {
-    await invite(username, (localCam.current as HTMLVideoElement).srcObject as MediaStream);
+  const sendInvitation = async () => {
+    await invite((localCam.current as HTMLVideoElement).srcObject as MediaStream);
   };
 
   const connect = async () => {
-    if (username === '') {
-      return;
-    }
-
     const myStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
     (localCam.current as HTMLVideoElement).srcObject = myStream;
 
@@ -70,20 +64,7 @@ function App () {
 
       switch (msg.type) {
         case 'id':
-          clientID = msg.id;
-          console.log(clientID);
-          setMyUsername(username);
-          sendToServer({
-            name: username,
-            date: Date.now(),
-            id: clientID,
-            type: 'username'
-          });
-          break;
-
-        case 'username':
-          text = 'User ' + msg.name + ' - signed in at ' + timeStr;
-          setText((previous) => [...previous, text]);
+          setMyId(msg.id); // in rtc
           break;
 
         case 'message':
@@ -99,7 +80,7 @@ function App () {
         // signaling information during negotiations leading up to a video
         // call.
 
-        case 'video-offer':  // Invitation and offer to chat
+        case 'video-offer':  // Receive the offert to chat
           await handleVideoOfferMsg(msg, myStream);
           break;
 
@@ -125,21 +106,18 @@ function App () {
   return (
     <>
       <h1>Chat</h1>
-      <p>Click a username in the user list to ask them to enter a one-on-one video chat with you.</p>
-      <p>Enter a username:
-        <input style={{padding: '5px', marginLeft: '5px'}} type="text" value={username} onChange={e => setUsername(e.target.value)}/>
-        <button onClick={connect}>Connect</button>
-      </p>
+      <button onClick={connect}>Connect</button>
+      <button onClick={sendInvitation}>Start</button>
       <button onClick={hangUpCall}>Hang up</button>
       <div className="camerabox">
-          <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
+        <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
         <video style={{border: '3px solid green'}} ref={localCam} autoPlay></video>
       </div>
 
       <div id="onlineUsers">
         <ul>
           {onlineUsers.map(user => (
-            <li key={user} onClick={() => sendInvitation(user)}>{user}</li>
+            <li key={user}>{user}</li>
           ))}
         </ul>
       </div>
