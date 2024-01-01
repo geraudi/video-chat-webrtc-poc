@@ -7,6 +7,7 @@ import {
   handleVideoAnswerMsg,
   handleVideoOfferMsg,
   invite,
+  mediaConstraints,
   setMyUsername,
   setOnTrackCallBack,
   setSendToServer
@@ -27,38 +28,47 @@ function App () {
   const hangUpCall = () => {
     closeVideoCall();
 
-    if (localCam.current.srcObject) {
+    if (localCam.current?.srcObject) {
       localCam.current.pause();
-      localCam.current.srcObject.getTracks().forEach(track => {
+      (localCam.current.srcObject as MediaStream).getTracks().forEach(track => {
         track.stop();
       });
     }
 
-    sendToServer(ws.current,{
+    if (ws.current === undefined) {
+      return;
+    }
+
+    sendToServer(ws.current, {
       name: username,
       target: strangerUsername,
-      type: "hang-up"
+      type: 'hang-up'
     });
-  }
+  };
 
-  const onTrack = (event) => {
-    strangerCam.current.srcObject = event.streams[0];
-  }
+  const onTrack = (event: RTCTrackEvent) => {
+    if (strangerCam.current) {
+      strangerCam.current.srcObject = event.streams[0];
+    }
+  };
 
   const sendInvitation = async (username: string) => {
     setStrangerUsername(username);
-    (localCam.current as HTMLVideoElement).srcObject = await invite(username);
-  }
+    await invite(username, (localCam.current as HTMLVideoElement).srcObject as MediaStream);
+  };
 
-  const connect = () => {
+  const connect = async () => {
     if (username === '') {
       return;
     }
 
+    const myStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    (localCam.current as HTMLVideoElement).srcObject = myStream;
+
     ws.current = new WebSocket('ws://localhost:6503', ['json']);
 
     setOnTrackCallBack(onTrack);
-    setSendToServer(((msg: Message) => sendToServer(ws.current, msg)));
+    setSendToServer(((msg: Message) => sendToServer(ws.current as WebSocket, msg)));
 
     ws.current.onopen = (event) => {
       console.log('WebSocket Client Connected', event);
@@ -99,7 +109,7 @@ function App () {
           setText((previous) => [...previous, text]);
           break;
 
-        case "userlist":      // Received an updated user list
+        case 'userlist':      // Received an updated user list
           setOnlineUsers(msg.users);
           break;
 
@@ -109,17 +119,7 @@ function App () {
 
         case 'video-offer':  // Invitation and offer to chat
           console.log('Received video chat offer from ' + msg.name);
-          const {
-            webcamStream,
-            myPeerConnection
-          } = await handleVideoOfferMsg(msg);
-          (localCam.current as HTMLVideoElement).srcObject = webcamStream;
-          sendToServer(ws.current as WebSocket, {
-            name: username,
-            target: msg.name,
-            type: 'video-answer',
-            sdp: myPeerConnection.localDescription
-          });
+          await handleVideoOfferMsg(msg, myStream);
           break;
 
         case 'video-answer':  // Callee has answered our offer
@@ -137,7 +137,7 @@ function App () {
 
       console.log(text);
     };
-  }
+  };
 
   useEffect(() => {
     //clean up function
@@ -161,7 +161,7 @@ function App () {
       <div id="onlineUsers">
         <ul>
           {onlineUsers.map(user => (
-            <li onClick={() => sendInvitation(user)}>{user}</li>
+            <li key={user} onClick={() => sendInvitation(user)}>{user}</li>
           ))}
         </ul>
       </div>

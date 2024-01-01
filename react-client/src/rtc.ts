@@ -9,7 +9,6 @@ import { Message } from './webSocket.ts';
 let myUsername: string | null = null;
 let targetUsername: string | null = null;      // To store username of other peer
 let myPeerConnection: RTCPeerConnection | null = null;    // RTCPeerConnection
-let transceiver: (track: any) => RTCRtpTransceiver | null = null;         // RTCRtpTransceiver
 let webcamStream: MediaStream | null = null;        // MediaStream from webcam
 
 let sendToServer: (message:Message) => void = () => {};
@@ -55,7 +54,7 @@ console.log("Hostname: " + myHostname);
 // a |notificationneeded| event, so we'll let our handler for that
 // make the offer.
 
-export async function invite(clickedUsername: string) {
+export async function invite(clickedUsername: string, myStream: MediaStream) {
   console.log("Starting to prepare an invitation");
   if (myPeerConnection) {
     alert("You can't start a call because you already have one open!");
@@ -77,25 +76,23 @@ export async function invite(clickedUsername: string) {
     // Get access to the webcam stream and attach it to the
     // "preview" box (id "local_video").
 
-    try {
-      webcamStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      //document.getElementById("local_video").srcObject = webcamStream;
-    } catch(err) {
-      handleGetUserMediaError(err);
-      return;
-    }
+    // try {
+    //   webcamStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    //   //document.getElementById("local_video").srcObject = webcamStream;
+    // } catch(err) {
+    //   handleGetUserMediaError(err);
+    //   return;
+    // }
 
     // Add the tracks from the stream to the RTCPeerConnection
     try {
-      webcamStream.getTracks().forEach(
-        track => myPeerConnection.addTransceiver(track, {streams: [webcamStream]})
+      myStream.getTracks().forEach(
+        track => (myPeerConnection as RTCPeerConnection).addTransceiver(track, {streams: [myStream]})
       );
     } catch(err) {
-      handleGetUserMediaError(err);
+      handleGetUserMediaError(err as Error);
     }
   }
-
-  return webcamStream;
 }
 
 // Handles |icecandidate| events by forwarding the specified
@@ -191,14 +188,14 @@ async function createPeerConnection() {
   myPeerConnection.ontrack = handleTrackEvent;
 }
 
-let onTrackCallcallback = (event: Event) => {
+let onTrackCallcallback = (event: RTCTrackEvent) => {
   console.log('basic on track event.', event);
 };
 
-export function setOnTrackCallBack(callback: (event: Event) => void) {
+export function setOnTrackCallBack(callback: (event: RTCTrackEvent) => void) {
   onTrackCallcallback = callback;
 }
-function handleTrackEvent(event: Event) {
+function handleTrackEvent(event: RTCTrackEvent) {
   console.log("*** Track event");
   onTrackCallcallback(event);
   //document.getElementById("received_video").srcObject = event.streams[0];
@@ -253,7 +250,7 @@ async function handleNegotiationNeededEvent() {
 // they simply opted not to share their media, that's not really an
 // error, so we won't present a message in that situation.
 
-function handleGetUserMediaError(e) {
+function handleGetUserMediaError(e: Error) {
   console.error(e);
   switch(e.name) {
     case "NotFoundError":
@@ -320,8 +317,8 @@ export function closeVideoCall() {
 // create our RTCPeerConnection, get and attach our local camera
 // stream, then create and send an answer to the caller.
 
-export async function handleVideoOfferMsg(msg: Message) {
-  targetUsername = msg.name;
+export async function handleVideoOfferMsg(msg: Message, myStream: MediaStream) {
+  targetUsername = msg.name as string;
 
   // If we're not already connected, create an RTCPeerConnection
   // to be linked to the caller.
@@ -333,7 +330,7 @@ export async function handleVideoOfferMsg(msg: Message) {
   // We need to set the remote description to the received SDP offer
   // so that our local WebRTC layer knows how to talk to the caller.
 
-  const desc = new RTCSessionDescription(msg.sdp);
+  const desc = new RTCSessionDescription(msg.sdp as RTCSessionDescription);
 
   // If the connection isn't stable yet, wait for it...
 
@@ -356,22 +353,14 @@ export async function handleVideoOfferMsg(msg: Message) {
 
   if (!webcamStream) {
     try {
-      webcamStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    } catch(err) {
-      handleGetUserMediaError(err);
-      return;
-    }
-
-    // document.getElementById("local_video").srcObject = webcamStream;
-
-    // Add the camera stream to the RTCPeerConnection
-
-    try {
-      webcamStream.getTracks().forEach(
-        transceiver = track => myPeerConnection.addTransceiver(track, {streams: [webcamStream]})
+      myStream.getTracks().forEach(
+        track => (myPeerConnection as RTCPeerConnection).addTransceiver(track, {streams: [myStream]})
       );
+
+      webcamStream = myStream;
+
     } catch(err) {
-      handleGetUserMediaError(err);
+      handleGetUserMediaError(err as Error);
     }
   }
 
@@ -379,30 +368,26 @@ export async function handleVideoOfferMsg(msg: Message) {
 
   await myPeerConnection.setLocalDescription(await myPeerConnection.createAnswer());
 
-  // sendToServer({
-  //   name: myUsername,
-  //   target: targetUsername,
-  //   type: "video-answer",
-  //   sdp: myPeerConnection.localDescription
-  // });
-
-  return {
-    webcamStream,
-    myPeerConnection
-  };
+  sendToServer({
+    name: myUsername,
+    target: targetUsername,
+    type: "video-answer",
+    sdp: myPeerConnection.localDescription
+  });
 }
 
 // Responds to the "video-answer" message sent to the caller
 // once the callee has decided to accept our request to talk.
 
-export async function handleVideoAnswerMsg(msg) {
+export async function handleVideoAnswerMsg(msg: Message) {
   console.log("*** Call recipient has accepted our call");
 
   // Configure the remote description, which is the SDP payload
   // in our "video-answer" message.
-
-  var desc = new RTCSessionDescription(msg.sdp);
-  await myPeerConnection.setRemoteDescription(desc).catch(reportError);
+  if (msg.sdp && myPeerConnection) {
+    const desc = new RTCSessionDescription(msg.sdp);
+    await myPeerConnection.setRemoteDescription(desc).catch(reportError);
+  }
 }
 
 // A new ICE candidate has been received from the other peer. Call
