@@ -30,31 +30,16 @@ let appendToMakeUnique = 1;
 // clientID. Each login gets an ID that doesn't change during the session,
 // so it can be tracked across username changes.
 function getConnectionForID(id) {
-  var connect = null;
-  var i;
-
-  for (i=0; i<connectionArray.length; i++) {
-    if (connectionArray[i].clientID === id) {
-      connect = connectionArray[i];
-      break;
-    }
-  }
-
-  return connect;
+  return connectionArray.find(connection => connection.clientID === id)
 }
 
 // Sends a message (which is already stringified JSON) to a single
 // user, given their username. We use this for the WebRTC signaling,
 // and we could use it for private text messaging.
 function sendToOneUser(target, msgString) {
-  var isUnique = true;
-  var i;
-
-  for (i=0; i<connectionArray.length; i++) {
-    if (connectionArray[i].username === target) {
-      connectionArray[i].sendUTF(msgString);
-      break;
-    }
+  const connection = connectionArray.find(connection => connection.username === target);
+  if (connection) {
+    connection.sendUTF(msgString);
   }
 }
 
@@ -62,19 +47,10 @@ function sendToOneUser(target, msgString) {
 // all connected users. Used to ramp up newly logged-in users and,
 // inefficiently, to handle name change notifications.
 function makeUserListMessage() {
-  var userListMsg = {
+  return {
     type: "userlist",
-    users: []
+    users: connectionArray.map(connection => connection.username)
   };
-  var i;
-
-  // Add the users to the list
-
-  for (i=0; i<connectionArray.length; i++) {
-    userListMsg.users.push(connectionArray[i].username);
-  }
-
-  return userListMsg;
 }
 
 // Sends a "userlist" message to all chat members. This is a cheesy way
@@ -82,13 +58,10 @@ function makeUserListMessage() {
 // efficient to send simple join/drop messages to each user, but this is
 // good enough for this simple example.
 function sendUserListToAll() {
-  var userListMsg = makeUserListMessage();
-  var userListMsgStr = JSON.stringify(userListMsg);
-  var i;
+  const userListMsg = makeUserListMessage();
+  const userListMsgStr = JSON.stringify(userListMsg);
 
-  for (i=0; i<connectionArray.length; i++) {
-    connectionArray[i].sendUTF(userListMsgStr);
-  }
+  connectionArray.forEach(connection => connection.sendUTF(userListMsgStr))
 }
 
 wsServer.on('request', function(request) {
@@ -110,6 +83,7 @@ wsServer.on('request', function(request) {
     type: "id",
     id: connection.clientID
   };
+  console.log(msg);
   connection.sendUTF(JSON.stringify(msg));
 
   connection.on('message', function(message) {
@@ -120,7 +94,7 @@ wsServer.on('request', function(request) {
 
       let sendToClients = true;
       const msg = JSON.parse(message.utf8Data);
-      const connect = getConnectionForID(msg.id);
+      const connection = getConnectionForID(msg.id);
 
       // Take a look at the incoming object and act on it based
       // on its type. Unknown message types are passed through,
@@ -131,40 +105,40 @@ wsServer.on('request', function(request) {
       switch(msg.type) {
         // Public, textual message
         case "message":
-          msg.name = connect.username;
+          msg.name = connection.username;
           msg.text = msg.text.replace(/(<([^>]+)>)/ig, "");
           break;
 
         // Username change
         case "username":
-          var nameChanged = false;
-          var origName = msg.name;
+          let isNameChanged = false;
+          const origName = msg.name;
 
           // Ensure the name is unique by appending a number to it
           // if it's not; keep trying that until it works.
           while (!isUsernameUnique(msg.name, connectionArray)) {
             msg.name = origName + appendToMakeUnique;
             appendToMakeUnique++;
-            nameChanged = true;
+            isNameChanged = true;
           }
 
           // If the name had to be changed, we send a "rejectusername"
           // message back to the user so they know their name has been
           // altered by the server.
-          if (nameChanged) {
-            var changeMsg = {
+          if (isNameChanged) {
+            const changeMsg = {
               id: msg.id,
               type: "rejectusername",
               name: msg.name
             };
-            connect.sendUTF(JSON.stringify(changeMsg));
+            connection.sendUTF(JSON.stringify(changeMsg));
           }
 
           // Set this connection's final username and send out the
           // updated user list to all users. Yeah, we're sending a full
           // list instead of just updating. It's horribly inefficient
           // but this is a demo. Don't do this in a real app.
-          connect.username = msg.name;
+          connection.username = msg.name;
           sendUserListToAll();
           sendToClients = false;  // We already sent the proper responses
           break;
@@ -177,21 +151,19 @@ wsServer.on('request', function(request) {
       // exchange signaling and other control objects unimpeded.
 
       if (sendToClients) {
-        var msgString = JSON.stringify(msg);
-        var i;
+        const msgString = JSON.stringify(msg);
 
         // If the message specifies a target username, only send the
         // message to them. Otherwise, send it to every user.
         if (msg.target && msg.target.length !== 0) {
           sendToOneUser(msg.target, msgString);
         } else {
-          for (i=0; i<connectionArray.length; i++) {
-            connectionArray[i].sendUTF(msgString);
-          }
+          connectionArray.forEach(connection => connection.sendUTF(msgString));
         }
       }
     }
   });
+
   connection.on('close', function(reason, description) {
     connectionArray = connectionArray.filter(function(el, idx, ar) {
       return el.connected;
@@ -209,6 +181,6 @@ wsServer.on('request', function(request) {
       logMessage += ": " + description;
     }
 
-    console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+    console.log((new Date()) + logMessage);
   });
 });
