@@ -4,6 +4,8 @@ POC of Video chat with random user like Omegle (RIP) or ome.tv based on this [ex
 
 See WebRTC documentation: [Signaling and video calling](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling)
 
+## Signaling transaction flow
+![signaling-video-chat-flow.png](./doc/signaling-video-chat-flow.png)
 ## Install
 ```
 pnpm i
