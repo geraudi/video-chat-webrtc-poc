@@ -1,0 +1,21 @@
+{
+  "name": "@aws-server/functions",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "sst bind vitest",
+    "typecheck": "tsc -noEmit"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
+    "@types/node": "^20.10.6",
+    "sst": "^2.39.2",
+    "vitest": "^1.1.1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.484.0",
+    "@aws-sdk/client-dynamodb": "^3.484.0",
+    "@aws-sdk/client-lambda": "^3.484.0",
+    "@aws-sdk/lib-dynamodb": "^3.484.0"
+  }
+}

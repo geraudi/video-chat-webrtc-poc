@@ -5,51 +5,27 @@
 // needed notifications on the call.
 
 import {
+  Actions,
   HangUpMessage,
   Message,
-  NewIceCandidateMessage,
-  ReceiveVideoOffertMessage,
-  SendVideoOffertMessage,
-  VideoAnswerMessage
-} from './messages.ts';
+  NewIceCandidateMessage, VideoAnswerInputMessage, VideoAnswerOutputMessage,
+  VideoOffertInputMessage,
+  VideoOffertOutputMessage
+} from './types/messages.ts';
 
 let ws: WebSocket;
 let strangerStream: MediaStream | null = null;
-let myId: string | null = null;
 let strangerId: string | null = null;      // To store username of other peer
 let myPeerConnection: RTCPeerConnection | null = null;    // RTCPeerConnection
 
-export const setMyId = (id: string) => myId = id;
 export const setWs = (webSock: WebSocket) => ws = webSock;
 
 export function sendToServer (msg: Message) {
   const msgJSON = JSON.stringify(msg);
 
-  console.log('Sending \'' + msg?.type + '\' message: ' + msgJSON);
+  console.log('Sending \'' + msg?.action + '\' message: ' + msgJSON);
   ws.send(msgJSON);
 }
-
-// The media constraints object describes what sort of stream we want
-// to request from the local A/V hardware (typically a webcam and
-// microphone). Here, we specify only that we want both audio and
-// video; however, you can be more specific. It's possible to state
-// that you would prefer (or require) specific resolutions of video,
-// whether to prefer the user-facing or rear-facing camera (if available),
-// and so on.
-//
-// See also:
-// https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamConstraints
-// https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-//
-
-export const mediaConstraints = {
-  audio: true,            // We want an audio track
-  video: {
-    aspectRatio: {
-      ideal: 1.333333     // 3:2 aspect is preferred
-    }
-  }
-};
 
 // Get our hostname
 
@@ -84,7 +60,7 @@ export async function invite (stream: MediaStream) {
 // begin, resume, or restart ICE negotiation.
 
 async function handleNegotiationNeededEvent () {
-  console.log('*** Negotiation needed');
+  console.log('=> handleNegotiationNeededEvent');
   if (myPeerConnection === null) return;
 
   try {
@@ -101,9 +77,8 @@ async function handleNegotiationNeededEvent () {
 
     console.log('---> Sending the offer to the remote peer');
 
-    const videoOffertMessage: SendVideoOffertMessage = {
-      type: 'video-offer',
-      id: myId as string,
+    const videoOffertMessage: VideoOffertOutputMessage = {
+      action: Actions.VIDEO_OFFER,
       sdp: myPeerConnection.localDescription as RTCSessionDescription
     };
     sendToServer(videoOffertMessage);
@@ -117,17 +92,17 @@ async function handleNegotiationNeededEvent () {
 // create our RTCPeerConnection, get and attach our local camera
 // stream, then create and send an answer to the caller.
 
-export async function handleVideoOfferMsg (msg: ReceiveVideoOffertMessage, stream: MediaStream) {
-  console.log('handleVideoOfferMsg', msg);
-  //if (!myId) return;
+export async function handleVideoOfferMsg (msg: VideoOffertInputMessage, stream: MediaStream) {
+  console.log('=> handleVideoOfferMsg');
+  console.log(msg);
 
-  strangerId = msg.id;
+  strangerId = msg.senderId;
   console.log('handleVideoOfferMsg:', strangerId);
   createPeerConnection();
 
   if (!myPeerConnection) {
     throw new Error('myPeerConnection error');
-  };
+  }
 
   const desc = new RTCSessionDescription(msg.sdp);
   await myPeerConnection.setRemoteDescription(desc);
@@ -143,10 +118,9 @@ export async function handleVideoOfferMsg (msg: ReceiveVideoOffertMessage, strea
     throw new Error('myPeerConnection.localDescription error');
   }
 
-  const videoAnswerMessage: VideoAnswerMessage = {
-    type: 'video-answer',
-    id: msg.targetId,
-    targetId: strangerId,
+  const videoAnswerMessage: VideoAnswerOutputMessage = {
+    action: Actions.VIDEO_ANSWER,
+    senderId: strangerId,
     sdp: myPeerConnection.localDescription
   };
   sendToServer(videoAnswerMessage);
@@ -154,8 +128,10 @@ export async function handleVideoOfferMsg (msg: ReceiveVideoOffertMessage, strea
 
 // Responds to the "video-answer" message sent to the caller
 // once the callee has decided to accept our request to talk.
-export async function handleVideoAnswerMsg (msg: VideoAnswerMessage) {
+export async function handleVideoAnswerMsg (msg: VideoAnswerInputMessage) {
+  console.log('=> handleVideoAnswerMsg');
   if (myPeerConnection) {
+    strangerId = msg.strangerId;
     const desc = new RTCSessionDescription(msg.sdp);
     await myPeerConnection.setRemoteDescription(desc).catch(reportError);
   }
@@ -168,12 +144,13 @@ export async function handleVideoAnswerMsg (msg: VideoAnswerMessage) {
 // peer through the signaling server.
 
 function handleICECandidateEvent (event: RTCPeerConnectionIceEvent) {
+  console.log('=> handleICECandidateEvent');
   if (event.candidate) {
     console.log('*** Outgoing ICE candidate: ' + event.candidate.candidate);
 
     const newIceCandidateMessage: NewIceCandidateMessage = {
-      type: 'new-ice-candidate',
-      targetId: strangerId as string,
+      action: Actions.NEW_ICE_CANDIDATE,
+      strangerId: strangerId as string,
       candidate: event.candidate
     };
     sendToServer(newIceCandidateMessage);
@@ -207,11 +184,10 @@ function handleTrackEvent (event: RTCTrackEvent) {
 // HANGING UP
 
 export function hangUpCall () {
-  console.log('*** Received hang up notification from other peer');
+  console.log('*** Send hang up');
   const hangUpMessage: HangUpMessage = {
-    type: 'hang-up',
-    id: myId as string,
-    targetId: strangerId as string
+    action: Actions.HANG_UP,
+    strangerId: strangerId as string
   };
   sendToServer(hangUpMessage);
 
