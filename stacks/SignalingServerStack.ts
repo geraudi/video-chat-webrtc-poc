@@ -14,7 +14,6 @@ export function SignalingServerStack({ stack }: StackContext) {
     routes: {
       $connect: "packages/functions/src/connect.main",
       $disconnect: "packages/functions/src/disconnect.main",
-      sendMessage: "packages/functions/src/sendMessage.main",
       videoOffer: "packages/functions/src/videoOffer.main",
       videoAnswer: "packages/functions/src/videoAnswer.main",
       newIceCandidate: "packages/functions/src/newIceCandidate.main",
