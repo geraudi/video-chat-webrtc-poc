@@ -1,10 +1,11 @@
 import handler from '@aws-server/core/handler';
 import apiGateway from '@aws-server/core/apiGateway';
+import { NewIceCandidateMessage } from '@aws-server/core/types/messages';
 
 export const main = handler(async (event) => {
   // strangerId, candidate
-  const originalMessage = JSON.parse(event.body as string);
-  const connectionId = event.requestContext.connectionId;
+  const originalMessage: NewIceCandidateMessage = JSON.parse(event.body as string);
+  const connectionId = event.requestContext.connectionId as string;
 
   const message = {
     action: originalMessage.action,

@@ -8,7 +8,7 @@ export const main = handler(async (event) => {
     TableName: dynamoDB.tableName,
     Item: {
       id: event.requestContext.connectionId,
-      available: 1
+      available: true
     }
   });
 

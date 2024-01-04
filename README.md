@@ -1,6 +1,6 @@
 # Signaling and video calling example
 
-POC of Video chat with random user like Omegle (RIP) or ome.tv based on this [example](https://github.com/mdn/content/blob/main/files/en-us/web/api/webrtc_api/signaling_and_video_calling/index.md?plain=1)
+POC of Video chat with random user like Omegle (RIP) or ome.tv based on this [example](https://github.com/mdn/samples-server/tree/master/s/webrtc-from-chat)
 
 See WebRTC documentation: [Signaling and video calling](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling)
 

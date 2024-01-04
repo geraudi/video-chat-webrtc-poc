@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import Webcam from 'react-webcam';
+
 import './App.css';
 import {
   closeVideoCall,
@@ -9,24 +11,11 @@ import {
   invite,
   setOnCloseVideoCallback,
   setOnTrackCallBack,
-  setWs
-} from './webRTC.ts';
+  setSignaler
+} from './lib/peerConnection.ts';
 import config from './config.ts';
-import { Actions } from './types/messages.ts';
+import { Actions } from '../../core/src/types/messages.ts';
 
-
-// The media constraints object describes what sort of stream we want
-// to request from the local A/V hardware (typically a webcam and
-// microphone). Here, we specify only that we want both audio and
-// video; however, you can be more specific. It's possible to state
-// that you would prefer (or require) specific resolutions of video,
-// whether to prefer the user-facing or rear-facing camera (if available),
-// and so on.
-//
-// See also:
-// https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamConstraints
-// https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
-//
 const mediaConstraints = {
   audio: true,            // We want an audio track
   video: {
@@ -38,11 +27,17 @@ const mediaConstraints = {
 
 function App () {
   const ws = useRef<WebSocket>();
-  const localCam = useRef<HTMLVideoElement | null>(null);
+  const findNext = useRef<boolean>();
+  const localCam = useRef<Webcam>(null);
   const strangerCam = useRef<HTMLVideoElement | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   const [isChatOn, setIsChatOn] = useState(false);
+
+  const stop = () => {
+    findNext.current = false;
+    hangUpCall();
+  }
 
   const onCloseVideo = () => {
     if (strangerCam.current) {
@@ -50,6 +45,9 @@ function App () {
       strangerCam.current.src = '';
     }
     setIsChatOn(false);
+    if (findNext.current === true) {
+      sendInvitation()
+    }
   };
 
   const onTrack = (event: RTCTrackEvent) => {
@@ -60,15 +58,16 @@ function App () {
   };
 
   const sendInvitation = async () => {
-    await invite((localCam.current as HTMLVideoElement).srcObject as MediaStream);
+    findNext.current = true;
+    await invite((localCam.current as unknown as HTMLVideoElement).srcObject as MediaStream);
   };
 
   const connect = async () => {
     const myStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    (localCam.current as HTMLVideoElement).srcObject = myStream;
+    (localCam.current as unknown as HTMLVideoElement).srcObject = myStream;
 
     ws.current = new WebSocket(config.signalingServer.URL, ['json']);
-    setWs(ws.current);
+    setSignaler(ws.current);
     setOnTrackCallBack(onTrack);
     setOnCloseVideoCallback(onCloseVideo);
 
@@ -79,7 +78,7 @@ function App () {
 
     ws.current.onclose = () => {
       setIsConnected(false);
-    }
+    };
 
     ws.current.onerror = function (evt) {
       console.dir(evt);
@@ -87,8 +86,7 @@ function App () {
 
     ws.current.onmessage = async function (evt) {
       const msg = JSON.parse(evt.data);
-      console.log('Message received: ');
-      console.dir(msg);
+      console.log(`<-- Message received: ${msg.action}`);
 
       switch (msg.action) {
         // Signaling messages: these messages are used to trade WebRTC
@@ -104,7 +102,7 @@ function App () {
           break;
 
         case Actions.NEW_ICE_CANDIDATE: // A new ICE candidate has been received
-          handleNewICECandidateMsg(msg);
+          await handleNewICECandidateMsg(msg);
           break;
 
         case Actions.HANG_UP: // The other peer has hung up the call
@@ -122,12 +120,16 @@ function App () {
   return (
     <>
       <h1>Chat with stranger</h1>
-      <button onClick={connect}  disabled={isConnected}>Connect</button>
-      <button onClick={sendInvitation} disabled={!isConnected || isChatOn}>Start</button>
-      <button onClick={hangUpCall} disabled={!isChatOn}>Hang up</button>
+      <button onClick={connect} disabled={isConnected}>Connect</button>
+      {isChatOn ? (
+        <button onClick={hangUpCall} disabled={!isConnected}>Next</button>
+      ) : (
+        <button onClick={sendInvitation} disabled={!isConnected}>Start</button>
+      )}
+      <button onClick={stop} disabled={!isChatOn}>Stop</button>
       <div className="camerabox">
         <video style={{border: '3px solid blue', marginRight: '10px'}} ref={strangerCam} autoPlay></video>
-        <video style={{border: '3px solid green'}} ref={localCam} autoPlay></video>
+        <Webcam audio ref={localCam}/>
       </div>
     </>
   );

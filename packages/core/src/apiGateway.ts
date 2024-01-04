@@ -16,7 +16,7 @@ function setApiClient(event: APIGatewayProxyEvent) {
 
 async function postToConnection (id: string, data: any) {
   if (apiClient === null) {
-    throw new Error('Call setApiClient.');
+    throw new Error('Call setApiClient first.');
   }
 
   if (id === null) return;

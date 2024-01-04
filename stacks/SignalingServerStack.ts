@@ -1,5 +1,6 @@
 import { StackContext, WebSocketApi, use } from "sst/constructs";
 import { StorageStack } from './StorageStack';
+import { Actions } from '../packages/core/src/types/messages';
 
 export function SignalingServerStack({ stack }: StackContext) {
   const { table } = use(StorageStack);
@@ -14,10 +15,10 @@ export function SignalingServerStack({ stack }: StackContext) {
     routes: {
       $connect: "packages/functions/src/connect.main",
       $disconnect: "packages/functions/src/disconnect.main",
-      videoOffer: "packages/functions/src/videoOffer.main",
-      videoAnswer: "packages/functions/src/videoAnswer.main",
-      newIceCandidate: "packages/functions/src/newIceCandidate.main",
-      hangUp: "packages/functions/src/hangUp.main",
+      [Actions.VIDEO_OFFER]: "packages/functions/src/videoOffer.main",
+      [Actions.VIDEO_ANSWER]: "packages/functions/src/videoAnswer.main",
+      [Actions.NEW_ICE_CANDIDATE]: "packages/functions/src/newIceCandidate.main",
+      [Actions.HANG_UP]: "packages/functions/src/hangUp.main",
     },
   });
 

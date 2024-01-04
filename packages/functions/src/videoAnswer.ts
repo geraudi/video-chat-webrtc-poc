@@ -1,12 +1,12 @@
 import handler from '@aws-server/core/handler';
 import apiGateway from '@aws-server/core/apiGateway';
+import { VideoAnswerInputMessage, VideoAnswerOutputMessage } from '@aws-server/core/types/messages';
 
 export const main = handler(async (event, context) => {
-  // sdp and senderId
-  const originalMessage = JSON.parse(event.body as string);
-  const connectionId = event.requestContext.connectionId;
+  const originalMessage: VideoAnswerOutputMessage = JSON.parse(event.body as string);
+  const connectionId = event.requestContext.connectionId as string;
 
-  const message = {
+  const message: VideoAnswerInputMessage = {
     action: originalMessage.action,
     sdp: originalMessage.sdp,
     strangerId: connectionId

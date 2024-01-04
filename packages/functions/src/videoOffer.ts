@@ -3,10 +3,11 @@ import { ScanCommand, ScanCommandOutput } from '@aws-sdk/lib-dynamodb';
 import handler from '@aws-server/core/handler';
 import dynamoDB from '@aws-server/core/dynamoDB';
 import apiGateway from '@aws-server/core/apiGateway';
+import { VideoOffertInputMessage, VideoOffertOutputMessage } from '@aws-server/core/types/messages';
 
 export const main = handler(async (event) => {
-  const messageData = JSON.parse(event.body as string);
-  const {connectionId} = event.requestContext;
+  const messageData: VideoOffertOutputMessage = JSON.parse(event.body as string);
+  const connectionId = event.requestContext.connectionId as string;
 
   // Get all the connections
   const scanCommand = new ScanCommand({
@@ -20,7 +21,7 @@ export const main = handler(async (event) => {
     const availableConnections = (connections.Items || []).filter(connection => connection.id !== connectionId);
     const randomConnection = availableConnections[Math.floor(Math.random() * availableConnections.length)];
 
-    const offerVideoMessage = {
+    const offerVideoMessage: VideoOffertInputMessage = {
       ...messageData,
       senderId: connectionId
     };
