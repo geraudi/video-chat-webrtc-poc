@@ -1,0 +1,30 @@
+{
+  "name": "@repo/signaling-ws",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "clean": "git clean -xdf .turbo node_modules",
+    "build": "node bundler.mjs"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.651.1",
+    "@aws-sdk/client-dynamodb": "^3.651.1",
+    "@aws-sdk/client-lambda": "^3.651.1",
+    "@aws-sdk/lib-dynamodb": "^3.651.1",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/signaling-types": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^22.5.5",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.24.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
+  }
+}
