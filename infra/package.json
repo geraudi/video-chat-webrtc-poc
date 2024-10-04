@@ -1,0 +1,26 @@
+{
+    "name": "@repo/infra",
+    "version": "0.0.0",
+    "main": "index.ts",
+    "scripts": {
+        "lint": "eslint . --max-warnings 0 --fix",
+        "check-types": "tsc --noEmit",
+        "deploy": "pulumi up --yes"
+    },
+    "devDependencies": {
+        "@types/node": "^22.5.5",
+        "eslint": "^8.57.1",
+        "typescript": "^5.6.2"
+    },
+    "dependencies": {
+        "@exanubes/pulumi-nodejs-function": "^1.0.10",
+        "@pulumi/aws": "^6.52.0",
+        "@pulumi/aws-static-website": "^0.4.0",
+        "@pulumi/awsx": "^2.15.0",
+        "@pulumi/pulumi": "^3.133.0",
+        "@repo/eslint-config": "workspace:*",
+        "@repo/signaling-types": "workspace:*",
+        "@repo/typescript-config": "workspace:*",
+        "archiver": "^7.0.1"
+    }
+}

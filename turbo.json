@@ -1,0 +1,49 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**"
+      ]
+    },
+    "deploy": {
+      "dependsOn": [
+        "lint",
+        "@repo/signaling-types#build",
+        "@repo/signaling-ws#build",
+        "@repo/frontend#build"
+      ],
+      "outputs": []
+    },
+    "check-types": {
+      "dependsOn": [
+        "^check-types"
+      ]
+    },
+    "lint": {
+      "dependsOn": [
+        "^lint"
+      ]
+    },
+    "clean": {},
+    "dev": {
+      "persistent": true,
+      "cache": false,
+      "dependsOn": ["@repo/signaling-types#build"]
+    }
+  },
+  "globalEnv": [
+    "CONNECTIONS_TABLE",
+    "TURSO_DATABASE_URL",
+    "TURSO_AUTH_TOKEN"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "outDir": "bin",
+        "target": "es2020",
+        "module": "commonjs",
+        "moduleResolution": "bundler",
+        "sourceMap": true,
+        "experimentalDecorators": true,
+        "pretty": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitReturns": true,
+        "forceConsistentCasingInFileNames": true
+    },
+    "include": [
+        "index.ts",
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        ".turbo"
+    ]
+}
