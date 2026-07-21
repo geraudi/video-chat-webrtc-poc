@@ -42,6 +42,36 @@ turso db tokens create my-turborepo
 turso db tokens invalidate
 ```
 
+### Local Development (No AWS Deployment Required)
+
+You can run the entire application locally without deploying to AWS:
+
+**1. Start the local signaling server:**
+```bash
+cd packages/signaling-ws
+pnpm install  # Install tsx and ws if not already installed
+node local-server.mjs
+# Server starts on http://localhost:3001
+```
+
+**2. In a separate terminal, start the frontend in local mode:**
+```bash
+cd apps/frontend
+pnpm install  # Ensure dependencies are installed
+pnpm run dev:local
+# Frontend starts on http://localhost:5173
+```
+
+**How it works:**
+- The local signaling server uses an in-memory store (no Turso DB needed)
+- The frontend detects `VITE_LOCAL_MODE=true` and connects to `ws://localhost:3001` instead of the AWS WebSocket endpoint
+- Peer matching happens locally via WebSocket
+- Video streams connect directly P2P via WebRTC
+
+**Notes:**
+- Open two browser tabs/windows to `http://localhost:5173` to test a call between peers
+- The local server runs on port 3001, the frontend on port 5173
+
 ### Pulumi
 Set db token in env variable TURSO_AUTH_TOKEN
 ```

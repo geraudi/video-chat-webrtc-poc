@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import useWebSocket, { ReadyState } from 'react-use-websocket';
+import useWebSocketModule, { ReadyState } from "react-use-websocket";
+
+const { default: useWebSocket = useWebSocketModule } = useWebSocketModule as unknown as {
+    default: typeof useWebSocketModule;
+};
 import config from '../config.ts';
 import {
   handleGetUserMediaError,
