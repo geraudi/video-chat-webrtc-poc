@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "VITE_LOCAL_MODE=true vite",
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --fix --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
@@ -12,28 +13,29 @@
     "clean": "git clean -xdf .turbo node_modules"
   },
   "dependencies": {
-    "react": "19.0.0-rc-3208e73e-20240730",
-    "react-dom": "19.0.0-rc-3208e73e-20240730",
-    "react-use-websocket": "^4.8.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-use-websocket": "^4.13.0",
     "react-webcam": "^7.2.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/signaling-types": "workspace:*",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "npm:types-react@19.0.0-rc.1",
     "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
-    "@types/webrtc": "^0.0.43",
-    "@typescript-eslint/eslint-plugin": "^8.6.0",
-    "@typescript-eslint/parser": "^8.6.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.20",
-    "eslint": "^8.57.1",
-    "eslint-plugin-react-hooks": "^4.6.2",
-    "eslint-plugin-react-refresh": "^0.4.12",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.11",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.6"
+    "@types/webrtc": "^0.0.47",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.4",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "postcss": "^8.5.21",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
   },
   "overrides": {
     "@types/react": "npm:types-react@rc",
