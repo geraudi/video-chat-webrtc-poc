@@ -6,15 +6,13 @@
     "./messages": "./src/messages.ts"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 0",
+    "lint": "biome check . --fix",
     "clean": "git clean -xdf .turbo node_modules"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
+    "@biomejs/biome": "^2.0.0",
     "@repo/typescript-config": "workspace:*",
-    "@types/eslint": "^9.6.1",
     "@types/node": "^26.1.1",
-    "eslint": "^10.7.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {

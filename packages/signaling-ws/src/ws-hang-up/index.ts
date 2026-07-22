@@ -1,9 +1,9 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
-import { HangUpMessage } from '@repo/signaling-types/messages';
 import {
   ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
+  PostToConnectionCommand
 } from '@aws-sdk/client-apigatewaymanagementapi';
+import type { HangUpMessage } from '@repo/signaling-types/messages';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 export const handler = async (event: APIGatewayProxyEvent) => {
   const originalMessage: HangUpMessage = JSON.parse(event.body as string);
@@ -13,12 +13,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
   const stage = event.requestContext.stage;
   const callbackUrl = `https://${domain}/${stage}`;
   const apiClient = new ApiGatewayManagementApiClient({
-    endpoint: callbackUrl,
+    endpoint: callbackUrl
   });
 
   const hangUpMessage: HangUpMessage = {
     action: originalMessage.action,
-    strangerId: connectionId,
+    strangerId: connectionId
   };
 
   try {
@@ -26,15 +26,15 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     await apiClient.send(
       new PostToConnectionCommand({
         ConnectionId: originalMessage.strangerId,
-        Data: JSON.stringify(hangUpMessage),
-      }),
+        Data: JSON.stringify(hangUpMessage)
+      })
     );
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Message hangUp sent.',
-      }),
+        message: 'Message hangUp sent.'
+      })
     };
   } catch (error) {
     console.error('Error sending message:', error);
@@ -42,8 +42,8 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to send message.',
-      }),
+        message: 'Failed to send message.'
+      })
     };
   }
 };

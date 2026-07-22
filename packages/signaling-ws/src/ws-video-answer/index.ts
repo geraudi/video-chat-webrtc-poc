@@ -1,16 +1,16 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
-import {
-  VideoAnswerInputMessage,
-  VideoAnswerOutputMessage,
-} from '@repo/signaling-types/messages';
 import {
   ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
+  PostToConnectionCommand
 } from '@aws-sdk/client-apigatewaymanagementapi'; // eslint-disable-next-line turbo/no-undeclared-env-vars
+import type {
+  VideoAnswerInputMessage,
+  VideoAnswerOutputMessage
+} from '@repo/signaling-types/messages';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 export const handler = async (event: APIGatewayProxyEvent) => {
   const originalMessage: VideoAnswerOutputMessage = JSON.parse(
-    event.body as string,
+    event.body as string
   );
   const connectionId = event.requestContext.connectionId as string;
 
@@ -22,12 +22,12 @@ export const handler = async (event: APIGatewayProxyEvent) => {
   const message: VideoAnswerInputMessage = {
     action: originalMessage.action,
     sdp: originalMessage.sdp,
-    strangerId: connectionId,
+    strangerId: connectionId
   };
 
   const command = new PostToConnectionCommand({
     ConnectionId: originalMessage.senderId,
-    Data: JSON.stringify(message),
+    Data: JSON.stringify(message)
   });
 
   try {
@@ -36,16 +36,16 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Message videoAnswer sent.',
-      }),
+        message: 'Message videoAnswer sent.'
+      })
     };
   } catch (error) {
     console.error('Error sending message:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to send message.',
-      }),
+        message: 'Failed to send message.'
+      })
     };
   }
 };

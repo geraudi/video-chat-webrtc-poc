@@ -13,7 +13,6 @@ video-chat-webrtc-poc/
 │   ├── signaling-types/   # Shared TypeScript message types
 │   ├── signaling-ws/      # WebSocket Lambda handlers
 │   ├── ui/                # Shared UI components
-│   ├── eslint-config/     # Shared ESLint configs
 │   └── typescript-config/ # Shared TypeScript configs
 ├── package.json           # Root workspace config
 ├── turbo.json             # Turborepo pipeline config
@@ -27,7 +26,7 @@ video-chat-webrtc-poc/
 pnpm i                    # Install all dependencies
 pnpm dev                  # Start all packages in dev mode
 pnpm build                # Build all packages
-pnpm lint                 # Lint all packages
+pnpm lint                 # Lint all packages (using Biome)
 pnpm type-check           # Type-check all packages
 pnpm clean                # Clean all caches and node_modules
 ```

@@ -1,14 +1,14 @@
 import * as pulumi from '@pulumi/pulumi';
 import { getApi } from './src/api';
-import { getStage } from './src/stage-api';
 import { getConnectLambda } from './src/connect-lambda';
 import { getDisconnectLambda } from './src/disconnect-lambda';
-import { getVideoOfferLambda } from './src/video-offer-lambda';
-import { getVideoAnswerLambda } from './src/video-answer';
-import { getNewIceCandidateLambda } from './src/new-ice-candidate-lambda';
 import { getHangUpLambda } from './src/hang-up-lambda';
 import { writeOutputsFile } from './src/helpers';
+import { getNewIceCandidateLambda } from './src/new-ice-candidate-lambda';
+import { getStage } from './src/stage-api';
 import { getStartLambda } from './src/start-lambda';
+import { getVideoAnswerLambda } from './src/video-answer';
+import { getVideoOfferLambda } from './src/video-offer-lambda';
 
 const config = new pulumi.Config();
 

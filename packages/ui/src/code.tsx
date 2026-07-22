@@ -1,8 +1,8 @@
-import {ReactNode} from "react";
+import type { ReactNode } from 'react';
 
 export function Code({
   children,
-  className,
+  className
 }: {
   children: ReactNode;
   className?: string;

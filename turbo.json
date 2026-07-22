@@ -2,18 +2,9 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        ".env*"
-      ],
-      "outputs": [
-        "dist/**",
-        ".next/**",
-        "!.next/cache/**"
-      ]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "deploy": {
       "dependsOn": [
@@ -25,14 +16,10 @@
       "outputs": []
     },
     "check-types": {
-      "dependsOn": [
-        "^check-types"
-      ]
+      "dependsOn": ["^check-types"]
     },
     "lint": {
-      "dependsOn": [
-        "^lint"
-      ]
+      "dependsOn": ["^lint"]
     },
     "clean": {},
     "dev": {
@@ -41,9 +28,5 @@
       "dependsOn": ["@repo/signaling-types#build"]
     }
   },
-  "globalEnv": [
-    "CONNECTIONS_TABLE",
-    "TURSO_DATABASE_URL",
-    "TURSO_AUTH_TOKEN"
-  ]
+  "globalEnv": ["CONNECTIONS_TABLE", "TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"]
 }

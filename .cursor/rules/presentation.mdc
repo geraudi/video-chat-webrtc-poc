@@ -1,0 +1,36 @@
+---
+description: How to format code correctly
+globs: *.tsx, *.ts
+alwaysApply: false
+---
+
+## Context
+
+- Follow this configuration to format code.
+- Follow these guidelines for all new code and when refactoring existing code
+
+
+## 1. Format code
+
+- You must use 2 space for indentation.
+- You must use Tailwind CSS for styling.
+
+## 2. File & Folder Naming
+
+#### Files
+- **Source Code**: `kebab-case.extension` (e.g., `resume-builder.ts`)
+- **React/Vue Components**: `kebab-case.tsx` (e.g., `ResumeForm.tsx`)
+- **Tests**: `[filename].{spec|test}.extension` (e.g., `resume-service.spec.ts`)
+- **Type Declaration Files**: `kebab-case.d.ts` (e.g., `resume-types.d.ts`)
+- **Configuration Files**: `kebab-case.config.ts` (e.g., `tailwind.config.ts`)
+- **Constants/Data Files**: `SCREAMING_SNAKE_CASE.ts` (e.g., `DEFAULT_RESUME_TEMPLATE.ts`)
+- **Server Action Files** : `kebab-case.action.ts` (e.g., `user.action.ts`)
+- **Zustand Store Files** : `kebab-case.store.ts` (e.g., `user.store.ts`)
+- **Zod Shema Files** : `kebab-case.schema.ts` (e.g., `user.schema.ts`)
+
+
+#### Folders
+- **General Purpose Folders**: `kebab-case` (e.g., `error-handling`)
+- **Domain/Feature Folders**: `kebab-case` (e.g., `resume-builder`)
+- **Clean Architecture Layers**: `kebab-case` (e.g., `domain`, `application`, `infrastructure`, `presentation`)
+- **Component Collections**: `kebab-case` (e.g., `ui-components`)

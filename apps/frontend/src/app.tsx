@@ -1,6 +1,6 @@
-import { useVideoChat } from './hooks/use-video-chat';
-import { VideoChat } from './components/video-chat';
 import { Button } from '@/components/ui/button';
+import { VideoChat } from './components/video-chat';
+import { useVideoChat } from './hooks/use-video-chat';
 
 export default function App() {
   const { localCam, strangerCam, isConnected, isChatOn, actions } =
@@ -8,7 +8,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <Button onClick={() => console.log("Hello from shadcn!")}>
+      <Button onClick={() => console.log('Hello from shadcn!')}>
         Test shadcn Button
       </Button>
       <VideoChat

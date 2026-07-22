@@ -1,26 +1,25 @@
 {
-    "name": "@repo/infra",
-    "version": "0.0.0",
-    "main": "index.ts",
-    "scripts": {
-        "lint": "eslint . --max-warnings 0 --fix",
-        "check-types": "tsc --noEmit",
-        "deploy": "pulumi up --yes"
-    },
-    "devDependencies": {
-        "@types/node": "^26.1.1",
-        "eslint": "^10.7.0",
-        "typescript": "^7.0.2"
-    },
-    "dependencies": {
-        "@exanubes/pulumi-nodejs-function": "^1.0.10",
-        "@pulumi/aws": "^7.37.0",
-        "@pulumi/aws-static-website": "^0.4.0",
-        "@pulumi/awsx": "^3.7.0",
-        "@pulumi/pulumi": "^3.253.0",
-        "@repo/eslint-config": "workspace:*",
-        "@repo/signaling-types": "workspace:*",
-        "@repo/typescript-config": "workspace:*",
-        "archiver": "^8.0.0"
-    }
+  "name": "@repo/infra",
+  "version": "0.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "lint": "biome check . --fix",
+    "check-types": "tsc --noEmit",
+    "deploy": "USER=utilisateur pulumi up --yes"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@exanubes/pulumi-nodejs-function": "^1.0.10",
+    "@pulumi/aws": "^7.37.0",
+    "@pulumi/aws-static-website": "^0.4.0",
+    "@pulumi/awsx": "^3.7.0",
+    "@pulumi/pulumi": "^3.253.0",
+    "@repo/signaling-types": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "archiver": "^8.0.0"
+  }
 }
