@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { turso } from '../lib/db-connection.js';
 
 export const handler = async function handler(event: APIGatewayProxyEvent) {
@@ -6,33 +6,33 @@ export const handler = async function handler(event: APIGatewayProxyEvent) {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'No connection id.',
-      }),
+        message: 'No connection id.'
+      })
     };
   }
 
   try {
     const result = await turso.execute({
       sql: 'DELETE FROM connection WHERE id = ?',
-      args: [event.requestContext.connectionId],
+      args: [event.requestContext.connectionId]
     });
     console.log(
       'Delete connection success',
       event.requestContext.connectionId,
-      result,
+      result
     );
   } catch (e) {
     console.log(
       'Delete connection failed',
       event.requestContext.connectionId,
-      e,
+      e
     );
   }
 
   return {
     statusCode: 200,
     body: JSON.stringify({
-      message: 'disconnected.',
-    }),
+      message: 'disconnected.'
+    })
   };
 };

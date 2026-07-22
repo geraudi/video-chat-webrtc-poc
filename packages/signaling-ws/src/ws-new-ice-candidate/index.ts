@@ -1,20 +1,20 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
-import { NewIceCandidateMessage } from '@repo/signaling-types/messages';
 import {
   ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
+  PostToConnectionCommand
 } from '@aws-sdk/client-apigatewaymanagementapi'; // eslint-disable-next-line turbo/no-undeclared-env-vars
+import type { NewIceCandidateMessage } from '@repo/signaling-types/messages';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 export const handler = async (event: APIGatewayProxyEvent) => {
   const originalMessage: NewIceCandidateMessage = JSON.parse(
-    event.body as string,
+    event.body as string
   );
   const connectionId = event.requestContext.connectionId as string;
 
   const message = {
     action: originalMessage.action,
     candidate: originalMessage.candidate,
-    strangerId: connectionId,
+    strangerId: connectionId
   };
 
   const domain = event.requestContext.domainName;
@@ -24,7 +24,7 @@ export const handler = async (event: APIGatewayProxyEvent) => {
 
   const command = new PostToConnectionCommand({
     ConnectionId: originalMessage.strangerId,
-    Data: JSON.stringify(message),
+    Data: JSON.stringify(message)
   });
 
   try {
@@ -33,16 +33,16 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: 'Message newIceCandidate sent.',
-      }),
+        message: 'Message newIceCandidate sent.'
+      })
     };
   } catch (error) {
     console.error('Error sending message:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'Failed to send message.',
-      }),
+        message: 'Failed to send message.'
+      })
     };
   }
 };

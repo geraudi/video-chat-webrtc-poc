@@ -12,25 +12,19 @@
     "./index.css": "./src/index.css"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 0",
+    "lint": "biome check . --fix",
     "generate:component": "turbo gen react-component",
     "clean": "git clean -xdf .turbo node_modules"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
+    "@biomejs/biome": "^2.0.0",
     "@repo/typescript-config": "workspace:*",
     "@turbo/gen": "^2.10.5",
-    "@types/eslint": "^9.6.1",
     "@types/node": "^26.1.1",
     "@types/react": "npm:types-react@19.0.0-rc.1",
     "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
-    "eslint": "^10.7.0",
     "postcss": "^8.5.21",
     "typescript": "^7.0.2"
-  },
-  "overrides": {
-    "@types/react": "npm:types-react@rc",
-    "@types/react-dom": "npm:types-react-dom@rc"
   },
   "dependencies": {}
 }

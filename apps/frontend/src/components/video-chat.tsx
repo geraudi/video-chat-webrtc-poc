@@ -1,4 +1,4 @@
-import { RefObject } from 'react';
+import type { RefObject } from 'react';
 
 interface VideoChatProps {
   localCam: RefObject<HTMLVideoElement | null>;
@@ -17,7 +17,7 @@ export function VideoChat({
   strangerCam,
   isConnected,
   isChatOn,
-  actions,
+  actions
 }: VideoChatProps) {
   return (
     <>

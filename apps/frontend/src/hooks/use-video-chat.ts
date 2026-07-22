@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import useWebSocketModule, { ReadyState } from "react-use-websocket";
+import useWebSocketModule, { ReadyState } from 'react-use-websocket';
 
-const { default: useWebSocket = useWebSocketModule } = useWebSocketModule as unknown as {
+const { default: useWebSocket = useWebSocketModule } =
+  useWebSocketModule as unknown as {
     default: typeof useWebSocketModule;
-};
+  };
+
 import config from '../config.ts';
 import {
   handleGetUserMediaError,
@@ -13,16 +15,16 @@ import {
   setOnTrackCallBack,
   setSignaler,
   setWebcamStream,
-  startChat,
+  startChat
 } from '../lib/chat.ts';
 
 const mediaConstraints = {
   audio: true,
   video: {
     aspectRatio: {
-      ideal: 1.333333,
-    },
-  },
+      ideal: 1.333333
+    }
+  }
 };
 
 export function useVideoChat() {
@@ -36,8 +38,8 @@ export function useVideoChat() {
   const { sendMessage, lastMessage, readyState } = useWebSocket(
     config.signalingServer.URL,
     {
-      share: false,
-    },
+      share: false
+    }
   );
 
   const onTrack = (event: RTCTrackEvent) => {
@@ -71,7 +73,7 @@ export function useVideoChat() {
     if (findNext.current) {
       startChat();
     }
-  }, [strangerCam]);
+  }, []);
 
   // Initialize websocket connection
   useEffect(() => {
@@ -86,7 +88,7 @@ export function useVideoChat() {
         setIsConnected(false);
         break;
     }
-  }, [onCloseVideo, readyState, sendMessage]);
+  }, [onCloseVideo, readyState, sendMessage, onTrack]);
 
   // Initialize webcam
   useEffect(() => {
@@ -105,7 +107,7 @@ export function useVideoChat() {
     };
 
     void getUserMedia();
-  }, [localCam]);
+  }, []);
 
   // Handle receive message from websocket
   useEffect(() => {
@@ -124,7 +126,7 @@ export function useVideoChat() {
     actions: {
       start: startChat,
       stop,
-      next,
-    },
+      next
+    }
   };
 }

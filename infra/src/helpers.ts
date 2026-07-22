@@ -1,10 +1,10 @@
-import * as aws from '@pulumi/aws';
-import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'node:fs';
+import type * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export function writeOutputsFile(
   api: aws.apigatewayv2.Api,
-  stage: aws.apigatewayv2.Stage,
+  stage: aws.apigatewayv2.Stage
 ) {
   pulumi
     .all([api.apiEndpoint, stage.name])
@@ -12,7 +12,7 @@ export function writeOutputsFile(
       console.log(`API Endpoint ID: ${apiEndpoint}`);
       fs.writeFileSync(
         'outputs.json',
-        JSON.stringify({ apiEndpoint: `${apiEndpoint}/${stageName}/` }),
+        JSON.stringify({ apiEndpoint: `${apiEndpoint}/${stageName}/` })
       );
     });
 }

@@ -1,14 +1,14 @@
 import {
   Actions,
-  HangUpMessage,
-  Message,
-  NewIceCandidateMessage,
-  ReceivedMessage,
-  StartMessage,
-  VideoAnswerInputMessage,
-  VideoAnswerOutputMessage,
-  VideoOfferInputMessage,
-  VideoOfferOutputMessage,
+  type HangUpMessage,
+  type Message,
+  type NewIceCandidateMessage,
+  type ReceivedMessage,
+  type StartMessage,
+  type VideoAnswerInputMessage,
+  type VideoAnswerOutputMessage,
+  type VideoOfferInputMessage,
+  type VideoOfferOutputMessage
 } from '@repo/signaling-types/messages';
 
 let myPeerConnection: RTCPeerConnection | null = null; // RTCPeerConnection
@@ -49,7 +49,7 @@ export function setOnCloseVideoCallback(callback: () => void) {
 async function createPeerConnection() {
   myPeerConnection = new RTCPeerConnection({
     // add your own TURN server here
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   });
 
   myPeerConnection.onicecandidate = handleICECandidateEvent;
@@ -63,7 +63,7 @@ async function createPeerConnection() {
 }
 
 export async function handleIncomingMessage(msg: ReceivedMessage) {
-  console.log('<-- Received : ' + msg.action);
+  console.log(`<-- Received : ${msg.action}`);
 
   switch (msg.action) {
     case Actions.INI_OFFER:
@@ -101,7 +101,7 @@ async function handleNegotiationNeededEvent() {
   try {
     const offer = await myPeerConnection.createOffer();
 
-    if (myPeerConnection.signalingState != 'stable') {
+    if (myPeerConnection.signalingState !== 'stable') {
       return;
     }
 
@@ -109,16 +109,16 @@ async function handleNegotiationNeededEvent() {
     await myPeerConnection.setLocalDescription(offer);
 
     // Send the offer to the remote peer.
-    console.log('---> SEND VIDEO OFFER to ' + strangerId);
+    console.log(`---> SEND VIDEO OFFER to ${strangerId}`);
     const videoOfferMessage: VideoOfferOutputMessage = {
       action: Actions.VIDEO_OFFER,
       sdp: myPeerConnection.localDescription as RTCSessionDescription,
-      strangerId,
+      strangerId
     };
     sendToServer(videoOfferMessage);
   } catch (err) {
     console.log(
-      '*** The following error occurred while handling the negotiationneeded event:',
+      '*** The following error occurred while handling the negotiationneeded event:'
     );
     console.error(err);
   }
@@ -134,7 +134,7 @@ function handleICECandidateEvent(event: RTCPeerConnectionIceEvent) {
     const newIceCandidateMessage: NewIceCandidateMessage = {
       action: Actions.NEW_ICE_CANDIDATE,
       strangerId,
-      candidate: event.candidate,
+      candidate: event.candidate
     };
     sendToServer(newIceCandidateMessage);
   }
@@ -187,7 +187,7 @@ function handleICEGatheringStateChangeEvent() {
 
 export function startChat() {
   const startMessage: StartMessage = {
-    action: Actions.START,
+    action: Actions.START
   };
   sendToServer(startMessage);
 }
@@ -204,8 +204,8 @@ async function invite() {
     try {
       webcamStream
         .getTracks()
-        .forEach((track) =>
-          myPeerConnection?.addTrack(track, webcamStream as MediaStream),
+        .forEach(track =>
+          myPeerConnection?.addTrack(track, webcamStream as MediaStream)
         );
       // => handleNegotiationNeededEvent will be triggered
     } catch (err) {
@@ -217,7 +217,7 @@ async function invite() {
 async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
   strangerId = msg.senderId;
 
-  console.log('RECEIVE VIDEO OFFER from ' + strangerId);
+  console.log(`RECEIVE VIDEO OFFER from ${strangerId}`);
   if (!myPeerConnection) {
     await createPeerConnection();
   }
@@ -225,12 +225,12 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
 
   const desc = new RTCSessionDescription(msg.sdp);
 
-  if (myPeerConnection.signalingState != 'stable') {
+  if (myPeerConnection.signalingState !== 'stable') {
     // Set the local and remove descriptions for rollback; don't proceed
     // until both return.
     await Promise.all([
       myPeerConnection.setLocalDescription({ type: 'rollback' }),
-      myPeerConnection.setRemoteDescription(desc),
+      myPeerConnection.setRemoteDescription(desc)
     ]);
     return;
   } else {
@@ -255,19 +255,19 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
 
   webcamStream
     .getTracks()
-    .forEach((track) =>
-      myPeerConnection?.addTrack(track, webcamStream as MediaStream),
+    .forEach(track =>
+      myPeerConnection?.addTrack(track, webcamStream as MediaStream)
     );
 
   await myPeerConnection.setLocalDescription(
-    await myPeerConnection.createAnswer(),
+    await myPeerConnection.createAnswer()
   );
 
-  console.log('---> SEND VIDEO ANSWER to ' + strangerId);
+  console.log(`---> SEND VIDEO ANSWER to ${strangerId}`);
   const videoAnswerMessage: VideoAnswerOutputMessage = {
     action: Actions.VIDEO_ANSWER,
     senderId: strangerId,
-    sdp: myPeerConnection?.localDescription as RTCSessionDescription,
+    sdp: myPeerConnection?.localDescription as RTCSessionDescription
   };
   sendToServer(videoAnswerMessage);
 }
@@ -287,7 +287,7 @@ export function handleGetUserMediaError(e: Error) {
     case 'NotFoundError':
       alert(
         'Unable to open your call because no camera and/or microphone' +
-          'were found.',
+          'were found.'
       );
       break;
     case 'SecurityError':
@@ -295,7 +295,7 @@ export function handleGetUserMediaError(e: Error) {
       // Do nothing; this is the same as the user canceling the call.
       break;
     default:
-      alert('Error opening your camera and/or microphone: ' + e.message);
+      alert(`Error opening your camera and/or microphone: ${e.message}`);
       break;
   }
 
@@ -311,7 +311,7 @@ export function hangUpCall() {
 
   const hangUpMessage: HangUpMessage = {
     action: Actions.HANG_UP,
-    strangerId: strangerId as string,
+    strangerId: strangerId as string
   };
   sendToServer(hangUpMessage);
 }
@@ -331,7 +331,7 @@ function closeVideoCall() {
 
     // Stop all transceivers on the connection
 
-    myPeerConnection.getTransceivers().forEach((transceiver) => {
+    myPeerConnection.getTransceivers().forEach(transceiver => {
       transceiver.stop();
     });
 

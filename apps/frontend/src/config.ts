@@ -10,8 +10,8 @@ const config = {
         '://' +
         window.location.hostname +
         ':3001'
-      : import.meta.env.VITE_SIGNALING_URL || '',
-  },
+      : import.meta.env.VITE_SIGNALING_URL || ''
+  }
 };
 
 export default config;

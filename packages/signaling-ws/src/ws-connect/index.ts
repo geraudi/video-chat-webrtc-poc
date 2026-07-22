@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { turso } from '../lib/db-connection.js';
 
 export const handler = async (event: APIGatewayProxyEvent) => {
@@ -8,15 +8,15 @@ export const handler = async (event: APIGatewayProxyEvent) => {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        message: 'No connection id.',
-      }),
+        message: 'No connection id.'
+      })
     };
   }
 
   try {
     await turso.execute({
       sql: 'INSERT INTO connection (id, isAvailable) VALUES (?, ?)',
-      args: [event.requestContext.connectionId, 0],
+      args: [event.requestContext.connectionId, 0]
     });
     console.log('Insert event.requestContext.connectionId into DB');
   } catch (e) {
@@ -26,7 +26,7 @@ export const handler = async (event: APIGatewayProxyEvent) => {
   return {
     statusCode: 201,
     body: JSON.stringify({
-      message: 'Connected.',
-    }),
+      message: 'Connected.'
+    })
   };
 };

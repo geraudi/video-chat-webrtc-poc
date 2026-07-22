@@ -5,7 +5,7 @@ export enum Actions {
   NEW_ICE_CANDIDATE = 'newIceCandidate',
   HANG_UP = 'hangUp',
   START = 'start',
-  INI_OFFER = 'initOffer',
+  INI_OFFER = 'initOffer'
 }
 
 export interface Message {
@@ -62,4 +62,4 @@ export type ReceivedMessage =
   | VideoOfferInputMessage
   | VideoAnswerInputMessage
   | NewIceCandidateMessage
-  | HangUpMessage
+  | HangUpMessage;

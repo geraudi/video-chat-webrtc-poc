@@ -1,5 +1,5 @@
-import * as esbuild from 'esbuild'
-import fs from "fs";
+import fs from 'node:fs';
+import * as esbuild from 'esbuild';
 
 const result = await esbuild.build({
   entryPoints: [
@@ -16,12 +16,16 @@ const result = await esbuild.build({
   platform: 'node',
   target: 'node20',
   minify: true,
-  metafile: true,
-})
+  metafile: true
+});
 
 if (result.metafile) {
   // use https://bundle-buddy.com/esbuild to analyses
-  await fs.writeFile('./bundles/metafile.json', JSON.stringify(result.metafile), () => {
-    console.log('Metafile written to ./bundles/metafile.json');
-  });
+  await fs.writeFile(
+    './bundles/metafile.json',
+    JSON.stringify(result.metafile),
+    () => {
+      console.log('Metafile written to ./bundles/metafile.json');
+    }
+  );
 }

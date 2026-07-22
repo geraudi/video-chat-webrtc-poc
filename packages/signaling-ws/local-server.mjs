@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // Simple wrapper to run the TypeScript local signaling server
-import { execSync } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const tsNode = path.join(__dirname, 'node_modules', '.bin', 'ts-node');
@@ -19,7 +19,9 @@ const tsxPath = path.join(__dirname, 'node_modules', '.bin', 'tsx');
 const executor = fs.existsSync(tsxPath) ? tsxPath : tsNode;
 
 if (!fs.existsSync(executor)) {
-  console.error('ts-node or tsx not found. Please install tsx: pnpm add -D tsx');
+  console.error(
+    'ts-node or tsx not found. Please install tsx: pnpm add -D tsx'
+  );
   process.exit(1);
 }
 

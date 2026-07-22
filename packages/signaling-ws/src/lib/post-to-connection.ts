@@ -1,15 +1,15 @@
 import {
   ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
+  PostToConnectionCommand
 } from '@aws-sdk/client-apigatewaymanagementapi';
-import { Message } from '@repo/signaling-types/messages';
-import { APIGatewayProxyEvent } from 'aws-lambda';
-import { PostToConnectionCommandOutput } from '@aws-sdk/client-apigatewaymanagementapi/dist-types/commands/PostToConnectionCommand.js';
+import type { PostToConnectionCommandOutput } from '@aws-sdk/client-apigatewaymanagementapi/dist-types/commands/PostToConnectionCommand.js';
+import type { Message } from '@repo/signaling-types/messages';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 
 export function postToConnection(
   event: APIGatewayProxyEvent,
   toConnectionId: string,
-  message: Message,
+  message: Message
 ): Promise<PostToConnectionCommandOutput> {
   const domain = event.requestContext.domainName;
   const stage = event.requestContext.stage;
@@ -18,7 +18,7 @@ export function postToConnection(
 
   const command = new PostToConnectionCommand({
     ConnectionId: toConnectionId,
-    Data: JSON.stringify(message),
+    Data: JSON.stringify(message)
   });
 
   return client.send(command);
