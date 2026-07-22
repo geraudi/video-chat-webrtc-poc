@@ -3,9 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    "./button": "./src/button.tsx",
+    "./button": "./src/components/button.tsx",
     "./card": "./src/card.tsx",
-    "./code": "./src/code.tsx"
+    "./code": "./src/code.tsx",
+    "./lib/utils": "./src/lib/utils.ts",
+    "./postcss.config": "./postcss.config.cjs",
+    "./tailwind.config": "./tailwind.config.ts",
+    "./index.css": "./src/index.css"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
@@ -21,13 +25,12 @@
     "@types/react": "npm:types-react@19.0.0-rc.1",
     "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
     "eslint": "^10.7.0",
+    "postcss": "^8.5.21",
     "typescript": "^7.0.2"
   },
   "overrides": {
     "@types/react": "npm:types-react@rc",
     "@types/react-dom": "npm:types-react-dom@rc"
   },
-  "dependencies": {
-    "react": "19.2.7"
-  }
+  "dependencies": {}
 }
