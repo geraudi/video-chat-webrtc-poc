@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "biome check . --fix",
     "clean": "git clean -xdf .turbo node_modules",
-    "build": "node bundler.mjs"
+    "build": "node bundler.mjs",
+    "dev": "tsx ./src/local-server/index.ts"
   },
   "devDependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.1091.0",
