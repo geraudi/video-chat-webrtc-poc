@@ -51,6 +51,9 @@ class LocalSignalingServer {
             case Actions.HANG_UP:
               this.forwardMessage(message, connectionId);
               break;
+            case Actions.WAITING:
+              // Client sending waiting acknowledgement, no action needed
+              break;
             default:
               console.log(`[Server] Unknown action: ${message.action}`);
           }
@@ -102,16 +105,20 @@ class LocalSignalingServer {
       otherAvailablePeer.isAvailable = false;
 
       // Send INIT_OFFER to both peers
+      // callerMessage: the requester is the caller, strangerId points to who they're calling
       const callerMessage: InitOfferMessage = {
         action: Actions.INI_OFFER,
         role: 'caller',
+        senderId: requesterId,
         strangerId: otherAvailablePeer.connectionId
       };
 
+      // calleeMessage: the other peer is the callee, senderId is who called them
       const calleeMessage: InitOfferMessage = {
         action: Actions.INI_OFFER,
         role: 'callee',
-        strangerId: requesterId
+        senderId: requesterId,
+        strangerId: otherAvailablePeer.connectionId
       };
 
       requesterWs.send(JSON.stringify(callerMessage));
@@ -121,16 +128,12 @@ class LocalSignalingServer {
     } else {
       // No peer available, mark as available and wait
       requesterPeer.isAvailable = true;
-      const _response: Message = {
-        action: Actions.START
-      };
 
-      // Send back confirmation
-      const ackMessage = JSON.stringify({
-        message: 'Available',
-        status: 'waiting'
-      });
-      requesterWs.send(ackMessage);
+      // Send a WaitingMessage to the requester
+      const waitingMessage: Message = {
+        action: Actions.WAITING
+      };
+      requesterWs.send(JSON.stringify(waitingMessage));
 
       console.log(`[Server] ${requesterId} is now available and waiting`);
     }
@@ -140,15 +143,16 @@ class LocalSignalingServer {
     const senderPeer = this.peers.get(senderId);
     if (!senderPeer) return;
 
-    let targetId: string | null = null;
-
     // Extract the target peer ID based on message type
+    let targetId: string | null = null;
+    
     switch (message.action) {
       case Actions.VIDEO_OFFER:
         targetId = (message as any).strangerId;
         break;
       case Actions.VIDEO_ANSWER:
-        targetId = (message as any).strangerId;
+        // videoAnswer uses `senderId` field for the target connection (the caller's connectionId)
+        targetId = (message as any).senderId ?? (message as any).strangerId;
         break;
       case Actions.NEW_ICE_CANDIDATE:
         targetId = (message as any).strangerId;
@@ -165,8 +169,16 @@ class LocalSignalingServer {
 
     const targetPeer = this.peers.get(targetId);
     if (targetPeer) {
-      // Modify the message to use senderId as strangerId for the recipient
-      const outgoingMessage = { ...message, strangerId: senderId };
+      // Include senderId so the receiver knows who sent the message.
+      // Only set strangerId if not already present to avoid overwriting.
+      const outgoingMessage: Message & { senderId?: string; strangerId?: string } = { 
+        ...message, 
+        senderId
+      };
+      // Set strangerId only if it wasn't already in the message (for single-peer forwarding)
+      if (!(outgoingMessage as any).strangerId) {
+        (outgoingMessage as any).strangerId = senderId;
+      }
       targetPeer.ws.send(JSON.stringify(outgoingMessage));
       console.log(
         `[Server] Forwarded ${message.action} from ${senderId} to ${targetId}`
@@ -180,20 +192,27 @@ class LocalSignalingServer {
 
   private removePeer(connectionId: string): void {
     const peer = this.peers.get(connectionId);
+    if (!peer) return;
 
-    // Notify any matching peer if we were matched
-    if (peer?.isAvailable) {
-      // If the available peer disconnects, just remove them
-      this.peers.delete(connectionId);
-      console.log(`[Server] Removed available peer ${connectionId}`);
-      return;
-    }
-
-    // Find and notify the other peer if we were matched
-    for (const [_id, p] of this.peers.entries()) {
-      if (p.isAvailable === false && p.connectionId !== connectionId) {
-        // This might be the matched peer - in a real app we'd track sessions
-        break;
+    // If the disconnecting peer was available (waiting for a match), 
+    // notify any waiting peer that they're now alone
+    if (peer.isAvailable) {
+      console.log(`[Server] Available peer ${connectionId} disconnected`);
+    } else {
+      // If the disconnecting peer was matched, the other peer should know
+      // Find the matched peer and notify them
+      for (const [id, p] of this.peers.entries()) {
+        if (p.connectionId === connectionId) continue;
+        if (!p.isAvailable) {
+          // This peer was in a matched state — send a hangUp-like notification
+          const hangUpMsg = JSON.stringify({ action: Actions.HANG_UP });
+          p.ws.send(hangUpMsg);
+          console.log(
+            `[Server] Notified matched peer ${id} that their peer disconnected`
+          );
+          // Reset the other peer's available state so they can match again
+          p.isAvailable = true;
+        }
       }
     }
 
