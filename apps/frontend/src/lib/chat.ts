@@ -14,6 +14,25 @@ import {
 let myPeerConnection: RTCPeerConnection | null = null; // RTCPeerConnection
 let webcamStream: MediaStream | null = null; // MediaStream from webcam
 let strangerId: string | null = null;
+let userId: string | null = null;
+
+/**
+ * Generate a unique user ID for debugging purposes
+ */
+export function generateUserId(): string {
+  if (!userId) {
+    userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  }
+  return userId;
+}
+
+export function getUserId(): string | null {
+  return userId;
+}
+
+export function getStrangerId(): string | null {
+  return strangerId;
+}
 
 let onTrackCallback: (event: RTCTrackEvent) => void;
 let onCloseVideoCallback: () => void;
@@ -307,13 +326,16 @@ function handleHangUpMsg() {
 }
 
 export function hangUpCall() {
-  closeVideoCall();
+  // Capture strangerId BEFORE closeVideoCall() resets it to null
+  const currentStrangerId = strangerId;
 
   const hangUpMessage: HangUpMessage = {
     action: Actions.HANG_UP,
-    strangerId: strangerId as string
+    strangerId: currentStrangerId as string
   };
   sendToServer(hangUpMessage);
+
+  closeVideoCall();
 }
 
 function closeVideoCall() {

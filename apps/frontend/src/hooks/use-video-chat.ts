@@ -8,6 +8,9 @@ const { default: useWebSocket = useWebSocketModule } =
 
 import config from '../config.ts';
 import {
+  generateUserId,
+  getStrangerId,
+  getUserId,
   handleGetUserMediaError,
   handleIncomingMessage,
   hangUpCall,
@@ -27,13 +30,27 @@ const mediaConstraints = {
   }
 };
 
+/**
+ * Single source of truth for the UI state machine.
+ * 
+ * Stage transitions:
+ * - idle → searching (onStart)
+ * - searching → connected (peer video received)
+ * - connected → searching (onNext / re-matching)
+ * - connected → idle (onStop / hangup)
+ * - searching → idle (optional, if connection fails before match)
+ */
+type Stage = 'idle' | 'searching' | 'connected';
+
 export function useVideoChat() {
-  const findNext = useRef<boolean>(false);
   const localCam = useRef<HTMLVideoElement>(null);
   const strangerCam = useRef<HTMLVideoElement | null>(null);
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [isChatOn, setIsChatOn] = useState(false);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  // Single source of truth for button state
+  const [stage, setStage] = useState<Stage>('idle');
+  const [userId] = useState(() => generateUserId());
+  const [strangerId, setStrangerId] = useState<string | null>(null);
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(
     config.signalingServer.URL,
@@ -42,6 +59,7 @@ export function useVideoChat() {
     }
   );
 
+  // Callback when a peer's video track is received
   const onTrack = (event: RTCTrackEvent) => {
     event.track.onunmute = () => {
       if (strangerCam.current?.srcObject) {
@@ -49,30 +67,57 @@ export function useVideoChat() {
       }
       if (strangerCam.current) {
         strangerCam.current.srcObject = event.streams[0];
-        setIsChatOn(true);
+        // Chat connected → transition to connected stage
+        setStage('connected');
       }
     };
+    // Also set the stream immediately for headless testing (onunmute may not fire in mocks)
+    if (strangerCam.current && !strangerCam.current.srcObject) {
+      strangerCam.current.srcObject = event.streams[0];
+      // Chat connected → transition to connected stage
+      setStage('connected');
+    }
   };
 
-  const stop = () => {
-    findNext.current = false;
-    hangUpCall();
-  };
+  // Callback when video call ends (peer disconnected or hangup)
+  const onCloseVideo = useCallback(
+    (_reason?: 'replacing' | undefined) => {
+      if (strangerCam.current) {
+        strangerCam.current.srcObject = null;
+        strangerCam.current.src = '';
+      }
+      // Call ended → peer disconnected, transition to searching for new peer
+      setStage('searching');
+    },
+    []
+  );
 
-  const next = () => {
-    findNext.current = true;
-    hangUpCall();
-  };
+  // Start button clicked: make this peer available for matching
+  const onStart = useCallback(() => {
+    startChat();
+    setStage('searching');
+  }, []);
 
-  const onCloseVideo = useCallback(() => {
+  // Next button clicked: hang up current chat and immediately search for a new peer
+  const onNext = useCallback(() => {
+    // Disconnect from current chat first
     if (strangerCam.current) {
       strangerCam.current.srcObject = null;
       strangerCam.current.src = '';
     }
-    setIsChatOn(false);
-    if (findNext.current) {
-      startChat();
-    }
+
+    // Hang up via signaling
+    hangUpCall();
+
+    // Immediately start searching for a new peer
+    startChat();
+    setStage('searching');
+  }, []);
+
+  // Hang up without starting a new search
+  const onStop = useCallback(() => {
+    hangUpCall();
+    setStage('idle');
   }, []);
 
   // Initialize websocket connection
@@ -82,10 +127,10 @@ export function useVideoChat() {
         setSignaler({ send: sendMessage });
         setOnTrackCallBack(onTrack);
         setOnCloseVideoCallback(onCloseVideo);
-        setIsConnected(true);
+        setIsWebSocketConnected(true);
         break;
       case ReadyState.CLOSED:
-        setIsConnected(false);
+        setIsWebSocketConnected(false);
         break;
     }
   }, [onCloseVideo, readyState, sendMessage, onTrack]);
@@ -109,6 +154,11 @@ export function useVideoChat() {
     void getUserMedia();
   }, []);
 
+  // Update strangerId when it changes (from chat module)
+  useEffect(() => {
+    setStrangerId(getStrangerId());
+  }, [stage]);
+
   // Handle receive message from websocket
   useEffect(() => {
     const message = JSON.parse(lastMessage?.data ?? '{"action": "none"}');
@@ -121,12 +171,15 @@ export function useVideoChat() {
   return {
     localCam,
     strangerCam,
-    isConnected,
-    isChatOn,
+    isWebSocketConnected,
+    stage,
+    userId,
+    strangerId: strangerId ?? getUserId(),
+    // Actions
     actions: {
-      start: startChat,
-      stop,
-      next
+      onStart,
+      onNext,
+      onStop
     }
   };
 }
