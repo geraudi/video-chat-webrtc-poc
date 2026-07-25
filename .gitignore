@@ -20,3 +20,4 @@ dist
 
 infra/outputs.json
 
+playwright-report
