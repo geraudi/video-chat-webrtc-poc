@@ -9,6 +9,7 @@
     "deploy": {
       "dependsOn": [
         "lint",
+        "@repo/signaling-ws#check-types",
         "@repo/signaling-types#build",
         "@repo/signaling-ws#build",
         "@repo/frontend#build"
@@ -28,5 +29,5 @@
       "dependsOn": ["@repo/signaling-types#build"]
     }
   },
-  "globalEnv": ["CONNECTIONS_TABLE", "TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"]
+  "globalEnv": ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"]
 }

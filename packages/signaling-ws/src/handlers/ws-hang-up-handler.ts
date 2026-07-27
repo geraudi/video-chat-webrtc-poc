@@ -1,15 +1,25 @@
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { getUseCases } from '../lib/di-container.js';
+import { wrapHandler } from '../lib/wrap-handler.js';
 
 /**
  * AWS Lambda handler for the hangUp action.
  */
-export const handler = async (event: APIGatewayProxyEvent): Promise<{ statusCode: number; body: string }> => {
-  const connectionId = event.requestContext.connectionId!;
-  const message = JSON.parse(event.body as string);
+export const handler = wrapHandler('hangUp', async event => {
+  const connectionId = event.requestContext.connectionId;
+  const message = JSON.parse(event.body ?? '{}');
 
-  const { forwardMessage } = getUseCases();
+  if (!connectionId || !message.strangerId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Missing connection or stranger id.' })
+    };
+  }
+
+  const { forwardMessage } = getUseCases(event);
   await forwardMessage.execute(connectionId, message.strangerId, message);
 
-  return { statusCode: 200, body: JSON.stringify({ message: 'Message hangUp sent.' }) };
-};
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Message hangUp sent.' })
+  };
+});

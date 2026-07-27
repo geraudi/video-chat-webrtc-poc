@@ -1,11 +1,11 @@
 import { Actions, type Message } from '@repo/signaling-types/messages';
 import { WebSocket, WebSocketServer } from 'ws';
-import { InMemoryConnectionRepository } from '../adapters/repositories/in-memory-connection-repository.js';
 import { LocalWebSocketGateway } from '../adapters/gateways/local-websocket-gateway.js';
-import { FindStranger } from '../usecases/find-stranger.js';
-import { ForwardMessage } from '../usecases/forward-message.js';
+import { InMemoryConnectionRepository } from '../adapters/repositories/in-memory-connection-repository.js';
 import { ConnectPeer } from '../usecases/connect-peer.js';
 import { DisconnectPeer } from '../usecases/disconnect-peer.js';
+import { FindStranger } from '../usecases/find-stranger.js';
+import { ForwardMessage } from '../usecases/forward-message.js';
 
 /**
  * Local WebSocket server using Ports & Adapters architecture.
@@ -14,7 +14,7 @@ import { DisconnectPeer } from '../usecases/disconnect-peer.js';
 class LocalSignalingServer {
   // peers maps connectionId -> WebSocket for direct message delivery
   private peers: Map<string, WebSocket> = new Map();
-  
+
   // Use cases with their dependencies (adapters)
   private findStranger: FindStranger;
   private forwardMessage: ForwardMessage;
@@ -41,7 +41,9 @@ class LocalSignalingServer {
 
       this.peers.set(connectionId, ws);
 
-      console.log(`[Server] Connection ${connectionId} connected. Total peers: ${this.peers.size}`);
+      console.log(
+        `[Server] Connection ${connectionId} connected. Total peers: ${this.peers.size}`
+      );
 
       // Use the ConnectPeer use case
       this.connectPeer.execute(connectionId).catch(err => {
@@ -52,23 +54,34 @@ class LocalSignalingServer {
       ws.on('message', data => {
         try {
           const message = JSON.parse(data.toString()) as Message;
-          console.log(`[Server] Received ${message.action} from ${connectionId}`);
+          console.log(
+            `[Server] Received ${message.action} from ${connectionId}`
+          );
 
           this.handleMessage(connectionId, message).catch(err => {
-            console.error(`[Server] Error handling ${message.action} from ${connectionId}:`, err);
+            console.error(
+              `[Server] Error handling ${message.action} from ${connectionId}:`,
+              err
+            );
           });
         } catch (error) {
-          console.error(`[Server] Error processing message from ${connectionId}:`, error);
+          console.error(
+            `[Server] Error processing message from ${connectionId}:`,
+            error
+          );
         }
       });
 
       ws.on('close', () => {
         console.log(`[Server] Connection ${connectionId} disconnected`);
         this.peers.delete(connectionId);
-        
+
         // Use the DisconnectPeer use case
         this.disconnectPeer.execute(connectionId).catch(err => {
-          console.error(`[Server] Error disconnecting peer ${connectionId}:`, err);
+          console.error(
+            `[Server] Error disconnecting peer ${connectionId}:`,
+            err
+          );
         });
       });
 
@@ -77,10 +90,15 @@ class LocalSignalingServer {
       });
     });
 
-    console.log(`[Server] Local signaling server running on ws://localhost:${port}`);
+    console.log(
+      `[Server] Local signaling server running on ws://localhost:${port}`
+    );
   }
 
-  private async handleMessage(connectionId: string, message: Message): Promise<void> {
+  private async handleMessage(
+    connectionId: string,
+    message: Message
+  ): Promise<void> {
     switch (message.action) {
       case Actions.START:
         await this.findStranger.execute(connectionId);
