@@ -14,6 +14,25 @@ import {
 let myPeerConnection: RTCPeerConnection | null = null; // RTCPeerConnection
 let webcamStream: MediaStream | null = null; // MediaStream from webcam
 let strangerId: string | null = null;
+let userId: string | null = null;
+
+/**
+ * Generate a unique user ID for debugging purposes
+ */
+export function generateUserId(): string {
+  if (!userId) {
+    userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  }
+  return userId;
+}
+
+export function getUserId(): string | null {
+  return userId;
+}
+
+export function getStrangerId(): string | null {
+  return strangerId;
+}
 
 let onTrackCallback: (event: RTCTrackEvent) => void;
 let onCloseVideoCallback: () => void;
@@ -23,8 +42,25 @@ let role: 'caller' | 'callee';
 let remoteIceCandidates: RTCIceCandidate[] = [];
 let hasRemoteDescription = false;
 
+// Pending match: when a match arrives before the local webcam stream is ready
+// (getUserMedia still resolving), we record it here and resume once the stream
+// is set via setWebcamStream. This replaces the old silent `if (!webcamStream) return`.
+let pendingCallerMatch: boolean = false;
+let pendingVideoOffer: VideoOfferInputMessage | null = null;
+
 export function setWebcamStream(stream: MediaStream) {
   webcamStream = stream;
+
+  // If a match was waiting for the stream, resume it now.
+  if (pendingCallerMatch) {
+    pendingCallerMatch = false;
+    void invite();
+  }
+  if (pendingVideoOffer) {
+    const offer = pendingVideoOffer;
+    pendingVideoOffer = null;
+    void handleVideoOfferMsg(offer);
+  }
 }
 
 interface ISignaler {
@@ -58,6 +94,7 @@ async function createPeerConnection() {
   myPeerConnection.onicegatheringstatechange =
     handleICEGatheringStateChangeEvent;
   myPeerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
+  myPeerConnection.onconnectionstatechange = handleConnectionStateChangeEvent;
   myPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
   myPeerConnection.ontrack = handleTrackEvent;
 }
@@ -131,6 +168,7 @@ function handleTrackEvent(event: RTCTrackEvent) {
 // Trigger: handleNegotiationNeededEvent -> setLocalDescription
 function handleICECandidateEvent(event: RTCPeerConnectionIceEvent) {
   if (event.candidate && strangerId) {
+    console.log(`---> SEND ICE CANDIDATE to ${strangerId}`);
     const newIceCandidateMessage: NewIceCandidateMessage = {
       action: Actions.NEW_ICE_CANDIDATE,
       strangerId,
@@ -160,10 +198,13 @@ async function handleNewICECandidateMsg(msg: NewIceCandidateMessage) {
 function handleICEConnectionStateChangeEvent() {
   if (!myPeerConnection) return;
 
+  console.log(
+    `[pc] iceConnectionState=${myPeerConnection.iceConnectionState} role=${role} stranger=${strangerId}`
+  );
+
   switch (myPeerConnection.iceConnectionState) {
     case 'closed':
     case 'failed':
-    case 'disconnected':
       closeVideoCall();
       break;
   }
@@ -171,6 +212,10 @@ function handleICEConnectionStateChangeEvent() {
 
 function handleSignalingStateChangeEvent() {
   if (!myPeerConnection) return;
+
+  console.log(
+    `[pc] signalingState=${myPeerConnection.signalingState} role=${role} stranger=${strangerId}`
+  );
 
   switch (myPeerConnection.signalingState) {
     case 'closed':
@@ -182,10 +227,21 @@ function handleSignalingStateChangeEvent() {
 }
 
 function handleICEGatheringStateChangeEvent() {
-  //log("*** ICE gathering state changed to: " + myPeerConnection.iceGatheringState);
+  if (!myPeerConnection) return;
+  console.log(
+    `[pc] iceGatheringState=${myPeerConnection.iceGatheringState} role=${role} stranger=${strangerId}`
+  );
+}
+
+function handleConnectionStateChangeEvent() {
+  if (!myPeerConnection) return;
+  console.log(
+    `[pc] connectionState=${myPeerConnection.connectionState} role=${role} stranger=${strangerId}`
+  );
 }
 
 export function startChat() {
+  console.log('---> SEND START (looking for stranger)');
   const startMessage: StartMessage = {
     action: Actions.START
   };
@@ -194,7 +250,14 @@ export function startChat() {
 
 async function invite() {
   console.log('INVITE');
-  if (!webcamStream) return;
+
+  // If the webcam stream isn't ready yet (getUserMedia still resolving),
+  // defer until setWebcamStream() flushes the pending match.
+  if (!webcamStream) {
+    console.log('INVITE deferred: webcam stream not ready yet');
+    pendingCallerMatch = true;
+    return;
+  }
 
   if (myPeerConnection) {
     alert("You can't start a call because you already have one open!");
@@ -218,6 +281,15 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
   strangerId = msg.senderId;
 
   console.log(`RECEIVE VIDEO OFFER from ${strangerId}`);
+
+  // If the webcam stream isn't ready yet (getUserMedia still resolving), defer
+  // the whole offer handling until setWebcamStream() flushes the pending offer.
+  if (!webcamStream) {
+    console.log('VIDEO OFFER deferred: webcam stream not ready yet');
+    pendingVideoOffer = msg;
+    return;
+  }
+
   if (!myPeerConnection) {
     await createPeerConnection();
   }
@@ -225,17 +297,9 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
 
   const desc = new RTCSessionDescription(msg.sdp);
 
-  if (myPeerConnection.signalingState !== 'stable') {
-    // Set the local and remove descriptions for rollback; don't proceed
-    // until both return.
-    await Promise.all([
-      myPeerConnection.setLocalDescription({ type: 'rollback' }),
-      myPeerConnection.setRemoteDescription(desc)
-    ]);
-    return;
-  } else {
-    await myPeerConnection.setRemoteDescription(desc);
-  }
+  // The callee never initiates an offer, so simultaneous-offer (glare) cannot
+  // happen here. Accept the remote offer directly.
+  await myPeerConnection.setRemoteDescription(desc);
 
   hasRemoteDescription = true;
 
@@ -251,8 +315,6 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
     console.log(`${size} received remote ICE candidates added to local peer`);
   }
 
-  if (!webcamStream) return;
-
   webcamStream
     .getTracks()
     .forEach(track =>
@@ -266,7 +328,7 @@ async function handleVideoOfferMsg(msg: VideoOfferInputMessage) {
   console.log(`---> SEND VIDEO ANSWER to ${strangerId}`);
   const videoAnswerMessage: VideoAnswerOutputMessage = {
     action: Actions.VIDEO_ANSWER,
-    senderId: strangerId,
+    strangerId,
     sdp: myPeerConnection?.localDescription as RTCSessionDescription
   };
   sendToServer(videoAnswerMessage);
@@ -307,13 +369,17 @@ function handleHangUpMsg() {
 }
 
 export function hangUpCall() {
-  closeVideoCall();
+  // Capture strangerId BEFORE closeVideoCall() resets it to null
+  const currentStrangerId = strangerId;
 
+  console.log(`---> SEND HANG_UP to ${currentStrangerId}`);
   const hangUpMessage: HangUpMessage = {
     action: Actions.HANG_UP,
-    strangerId: strangerId as string
+    strangerId: currentStrangerId as string
   };
   sendToServer(hangUpMessage);
+
+  closeVideoCall();
 }
 
 function closeVideoCall() {
@@ -327,6 +393,7 @@ function closeVideoCall() {
     myPeerConnection.oniceconnectionstatechange = null;
     myPeerConnection.onsignalingstatechange = null;
     myPeerConnection.onicegatheringstatechange = null;
+    myPeerConnection.onconnectionstatechange = null;
     myPeerConnection.onnegotiationneeded = null;
 
     // Stop all transceivers on the connection
@@ -335,16 +402,22 @@ function closeVideoCall() {
       transceiver.stop();
     });
 
-    // Close the peer connection
-
+    // Close the peer connection.
+    // NOTE: webcamStream is intentionally NOT nulled here. The local media
+    // stream is persistent (acquired once on mount) and must survive a teardown
+    // so the next match can reuse it. Only the RTCPeerConnection is per-match.
     myPeerConnection.close();
     myPeerConnection = null;
-    webcamStream = null;
     hasRemoteDescription = false;
     remoteIceCandidates = [];
 
     onCloseVideoCallback();
   }
+
+  // Drop any deferred match that was waiting on the webcam stream, so a stale
+  // offer/invite doesn't fire against the wrong stranger after teardown.
+  pendingCallerMatch = false;
+  pendingVideoOffer = null;
 
   strangerId = null;
 }
