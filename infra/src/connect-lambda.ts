@@ -17,7 +17,9 @@ export function getConnectLambda(
       variables: {
         NODE_OPTIONS: '--enable-source-maps',
         TURSO_DATABASE_URL: dbUrl,
-        TURSO_AUTH_TOKEN: dbToken
+        TURSO_AUTH_TOKEN: dbToken,
+        DOMAIN_NAME: api.apiEndpoint,
+        STAGE: stage.name
       }
     },
     architectures: ['arm64'],

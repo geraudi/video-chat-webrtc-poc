@@ -1,73 +1,75 @@
-import {
-  Actions,
-  type InitOfferMessage,
-  type Message
-} from '@repo/signaling-types/messages';
-import { type WebSocket, WebSocketServer } from 'ws';
+import { Actions, type Message } from '@repo/signaling-types/messages';
+import { WebSocket, WebSocketServer } from 'ws';
+import { InMemoryConnectionRepository } from '../adapters/repositories/in-memory-connection-repository.js';
+import { LocalWebSocketGateway } from '../adapters/gateways/local-websocket-gateway.js';
+import { FindStranger } from '../usecases/find-stranger.js';
+import { ForwardMessage } from '../usecases/forward-message.js';
+import { ConnectPeer } from '../usecases/connect-peer.js';
+import { DisconnectPeer } from '../usecases/disconnect-peer.js';
 
-interface PeerConnection {
-  ws: WebSocket;
-  connectionId: string;
-  isAvailable: boolean;
-}
-
+/**
+ * Local WebSocket server using Ports & Adapters architecture.
+ * Uses InMemoryConnectionRepository and LocalWebSocketGateway for local dev.
+ */
 class LocalSignalingServer {
-  private peers: Map<string, PeerConnection> = new Map();
+  // peers maps connectionId -> WebSocket for direct message delivery
+  private peers: Map<string, WebSocket> = new Map();
+  
+  // Use cases with their dependencies (adapters)
+  private findStranger: FindStranger;
+  private forwardMessage: ForwardMessage;
+  private connectPeer: ConnectPeer;
+  private disconnectPeer: DisconnectPeer;
   private wss: WebSocketServer;
 
   constructor(port: number) {
+    // Create adapters
+    const repo = new InMemoryConnectionRepository();
+    const gateway = new LocalWebSocketGateway(this.peers);
+
+    // Wire up use cases
+    this.findStranger = new FindStranger(repo, gateway);
+    this.forwardMessage = new ForwardMessage(gateway);
+    this.connectPeer = new ConnectPeer(repo);
+    this.disconnectPeer = new DisconnectPeer(repo);
+
     this.wss = new WebSocketServer({ port });
 
     this.wss.on('connection', (ws: WebSocket) => {
       // Generate a unique connection ID for each peer
       const connectionId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const peer: PeerConnection = {
-        ws,
-        connectionId,
-        isAvailable: false
-      };
+      this.peers.set(connectionId, ws);
 
-      this.peers.set(connectionId, peer);
-      console.log(
-        `[Server] Connection ${connectionId} connected. Total peers: ${this.peers.size}`
-      );
+      console.log(`[Server] Connection ${connectionId} connected. Total peers: ${this.peers.size}`);
+
+      // Use the ConnectPeer use case
+      this.connectPeer.execute(connectionId).catch(err => {
+        console.error(`[Server] Error connecting peer ${connectionId}:`, err);
+      });
 
       // Handle messages from this peer
       ws.on('message', data => {
         try {
           const message = JSON.parse(data.toString()) as Message;
-          console.log(
-            `[Server] Received ${message.action} from ${connectionId}`
-          );
+          console.log(`[Server] Received ${message.action} from ${connectionId}`);
 
-          switch (message.action) {
-            case Actions.START:
-              this.handleStart(connectionId, ws);
-              break;
-            case Actions.VIDEO_OFFER:
-            case Actions.VIDEO_ANSWER:
-            case Actions.NEW_ICE_CANDIDATE:
-            case Actions.HANG_UP:
-              this.forwardMessage(message, connectionId);
-              break;
-            case Actions.WAITING:
-              // Client sending waiting acknowledgement, no action needed
-              break;
-            default:
-              console.log(`[Server] Unknown action: ${message.action}`);
-          }
+          this.handleMessage(connectionId, message).catch(err => {
+            console.error(`[Server] Error handling ${message.action} from ${connectionId}:`, err);
+          });
         } catch (error) {
-          console.error(
-            `[Server] Error processing message from ${connectionId}:`,
-            error
-          );
+          console.error(`[Server] Error processing message from ${connectionId}:`, error);
         }
       });
 
       ws.on('close', () => {
         console.log(`[Server] Connection ${connectionId} disconnected`);
-        this.removePeer(connectionId);
+        this.peers.delete(connectionId);
+        
+        // Use the DisconnectPeer use case
+        this.disconnectPeer.execute(connectionId).catch(err => {
+          console.error(`[Server] Error disconnecting peer ${connectionId}:`, err);
+        });
       });
 
       ws.on('error', error => {
@@ -75,155 +77,33 @@ class LocalSignalingServer {
       });
     });
 
-    console.log(
-      `[Server] Local signaling server running on ws://localhost:${port}`
-    );
+    console.log(`[Server] Local signaling server running on ws://localhost:${port}`);
   }
 
-  private handleStart(requesterId: string, requesterWs: WebSocket): void {
-    const requesterPeer = this.peers.get(requesterId);
-    if (!requesterPeer) return;
-
-    // Find an available peer
-    let otherAvailablePeer: PeerConnection | null = null;
-
-    for (const [id, peer] of this.peers.entries()) {
-      if (id !== requesterId && peer.isAvailable) {
-        otherAvailablePeer = peer;
-        break;
-      }
-    }
-
-    if (otherAvailablePeer) {
-      // Match found! Pair them up
-      console.log(
-        `[Server] Matched ${requesterId} with ${otherAvailablePeer.connectionId}`
-      );
-
-      // Mark both as unavailable
-      requesterPeer.isAvailable = false;
-      otherAvailablePeer.isAvailable = false;
-
-      // Send INIT_OFFER to both peers
-      // callerMessage: the requester is the caller, strangerId points to who they're calling
-      const callerMessage: InitOfferMessage = {
-        action: Actions.INI_OFFER,
-        role: 'caller',
-        senderId: requesterId,
-        strangerId: otherAvailablePeer.connectionId
-      };
-
-      // calleeMessage: the other peer is the callee, senderId is who called them
-      const calleeMessage: InitOfferMessage = {
-        action: Actions.INI_OFFER,
-        role: 'callee',
-        senderId: requesterId,
-        strangerId: otherAvailablePeer.connectionId
-      };
-
-      requesterWs.send(JSON.stringify(callerMessage));
-      otherAvailablePeer.ws.send(JSON.stringify(calleeMessage));
-
-      console.log(`[Server] Sent INIT_OFFER to both peers`);
-    } else {
-      // No peer available, mark as available and wait
-      requesterPeer.isAvailable = true;
-
-      // Send a WaitingMessage to the requester
-      const waitingMessage: Message = {
-        action: Actions.WAITING
-      };
-      requesterWs.send(JSON.stringify(waitingMessage));
-
-      console.log(`[Server] ${requesterId} is now available and waiting`);
-    }
-  }
-
-  private forwardMessage(message: Message, senderId: string): void {
-    const senderPeer = this.peers.get(senderId);
-    if (!senderPeer) return;
-
-    // Extract the target peer ID based on message type
-    let targetId: string | null = null;
-    
+  private async handleMessage(connectionId: string, message: Message): Promise<void> {
     switch (message.action) {
+      case Actions.START:
+        await this.findStranger.execute(connectionId);
+        break;
+
       case Actions.VIDEO_OFFER:
-        targetId = (message as any).strangerId;
-        break;
       case Actions.VIDEO_ANSWER:
-        // videoAnswer uses `senderId` field for the target connection (the caller's connectionId)
-        targetId = (message as any).senderId ?? (message as any).strangerId;
-        break;
       case Actions.NEW_ICE_CANDIDATE:
-        targetId = (message as any).strangerId;
-        break;
-      case Actions.HANG_UP:
-        targetId = (message as any).strangerId;
-        break;
-    }
-
-    if (!targetId) {
-      console.log(`[Server] No target ID found for message ${message.action}`);
-      return;
-    }
-
-    const targetPeer = this.peers.get(targetId);
-    if (targetPeer) {
-      // Include senderId so the receiver knows who sent the message.
-      // Only set strangerId if not already present to avoid overwriting.
-      const outgoingMessage: Message & { senderId?: string; strangerId?: string } = { 
-        ...message, 
-        senderId
-      };
-      // Set strangerId only if it wasn't already in the message (for single-peer forwarding)
-      if (!(outgoingMessage as any).strangerId) {
-        (outgoingMessage as any).strangerId = senderId;
-      }
-      targetPeer.ws.send(JSON.stringify(outgoingMessage));
-      console.log(
-        `[Server] Forwarded ${message.action} from ${senderId} to ${targetId}`
-      );
-    } else {
-      console.log(
-        `[Server] Target peer ${targetId} not found for message ${message.action}`
-      );
-    }
-  }
-
-  private removePeer(connectionId: string): void {
-    const peer = this.peers.get(connectionId);
-    if (!peer) return;
-
-    // If the disconnecting peer was available (waiting for a match), 
-    // notify any waiting peer that they're now alone
-    if (peer.isAvailable) {
-      console.log(`[Server] Available peer ${connectionId} disconnected`);
-    } else {
-      // If the disconnecting peer was matched, the other peer should know
-      // Find the matched peer and notify them
-      for (const [id, p] of this.peers.entries()) {
-        if (p.connectionId === connectionId) continue;
-        if (!p.isAvailable) {
-          // This peer was in a matched state — send a hangUp-like notification
-          const hangUpMsg = JSON.stringify({ action: Actions.HANG_UP });
-          p.ws.send(hangUpMsg);
-          console.log(
-            `[Server] Notified matched peer ${id} that their peer disconnected`
-          );
-          // Reset the other peer's available state so they can match again
-          p.isAvailable = true;
+      case Actions.HANG_UP: {
+        const strangerId = (message as any).strangerId;
+        if (strangerId) {
+          await this.forwardMessage.execute(connectionId, strangerId, message);
         }
+        break;
       }
-    }
 
-    this.peers.delete(connectionId);
-    console.log(
-      `[Server] Removed peer ${connectionId}. Remaining: ${this.peers.size}`
-    );
+      default:
+        console.log(`[Server] Unknown action: ${message.action}`);
+    }
   }
 }
 
-// Start the server if run directly (ESM equivalent of require.main === module)
+// Start the server if run directly
 const isMainModule = process.argv[1]?.endsWith('local-server/index.ts');
 if (isMainModule) {
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;

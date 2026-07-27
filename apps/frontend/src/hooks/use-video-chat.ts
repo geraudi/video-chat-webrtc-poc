@@ -87,6 +87,7 @@ export function useVideoChat() {
         strangerCam.current.src = '';
       }
       // Call ended → peer disconnected, transition to searching for new peer
+      startChat();
       setStage('searching');
     },
     []
@@ -106,12 +107,8 @@ export function useVideoChat() {
       strangerCam.current.src = '';
     }
 
-    // Hang up via signaling
+    // Hang up via signaling (will trigger onCloseVideo → startChat for auto-reconnect)
     hangUpCall();
-
-    // Immediately start searching for a new peer
-    startChat();
-    setStage('searching');
   }, []);
 
   // Hang up without starting a new search
