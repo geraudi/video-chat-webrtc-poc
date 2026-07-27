@@ -1,15 +1,25 @@
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { getUseCases } from '../lib/di-container.js';
+import { wrapHandler } from '../lib/wrap-handler.js';
 
 /**
  * AWS Lambda handler for the videoOffer action.
  */
-export const handler = async (event: APIGatewayProxyEvent): Promise<{ statusCode: number; body: string }> => {
-  const connectionId = event.requestContext.connectionId!;
-  const message = JSON.parse(event.body as string);
+export const handler = wrapHandler('videoOffer', async event => {
+  const connectionId = event.requestContext.connectionId;
+  const message = JSON.parse(event.body ?? '{}');
 
-  const { forwardMessage } = getUseCases();
+  if (!connectionId || !message.strangerId) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Missing connection or stranger id.' })
+    };
+  }
+
+  const { forwardMessage } = getUseCases(event);
   await forwardMessage.execute(connectionId, message.strangerId, message);
 
-  return { statusCode: 200, body: JSON.stringify({ message: 'Message videoOffer sent.' }) };
-};
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Message videoOffer sent.' })
+  };
+});

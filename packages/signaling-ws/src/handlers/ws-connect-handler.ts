@@ -1,14 +1,21 @@
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { getUseCases } from '../lib/di-container.js';
+import { wrapHandler } from '../lib/wrap-handler.js';
 
 /**
  * AWS Lambda handler for the $connect action.
  */
-export const handler = async (event: APIGatewayProxyEvent): Promise<{ statusCode: number; body: string }> => {
-  const connectionId = event.requestContext.connectionId!;
+export const handler = wrapHandler('$connect', async event => {
+  const connectionId = event.requestContext.connectionId;
 
-  const { connectPeer } = getUseCases();
+  if (!connectionId) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: 'No connection id.' })
+    };
+  }
+
+  const { connectPeer } = getUseCases(event);
   await connectPeer.execute(connectionId);
 
   return { statusCode: 200, body: JSON.stringify({ message: 'Connect.' }) };
-};
+});

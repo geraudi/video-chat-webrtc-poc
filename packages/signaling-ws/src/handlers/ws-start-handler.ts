@@ -1,10 +1,10 @@
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { getUseCases } from '../lib/di-container.js';
+import { wrapHandler } from '../lib/wrap-handler.js';
 
 /**
  * AWS Lambda handler for the START action.
  */
-export const handler = async (event: APIGatewayProxyEvent): Promise<{ statusCode: number; body: string }> => {
+export const handler = wrapHandler('start', async event => {
   const connectionId = event.requestContext.connectionId;
 
   if (!connectionId) {
@@ -14,11 +14,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<{ statusCode
     };
   }
 
-  const { findStranger } = getUseCases();
+  const { findStranger } = getUseCases(event);
   const result = await findStranger.execute(connectionId);
 
   return {
     statusCode: 201,
-    body: JSON.stringify({ message: result.status === 'waiting' ? 'Available.' : 'Init offer sent.' })
+    body: JSON.stringify({
+      message: result.status === 'waiting' ? 'Available.' : 'Init offer sent.'
+    })
   };
-};
+});

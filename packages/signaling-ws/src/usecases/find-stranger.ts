@@ -13,7 +13,9 @@ export class FindStranger {
     private gateway: ISignalingGateway
   ) {}
 
-  async execute(connectionId: string): Promise<{ status: 'matched' | 'waiting' }> {
+  async execute(
+    connectionId: string
+  ): Promise<{ status: 'matched' | 'waiting' }> {
     const stranger = await this.repo.findAvailable(connectionId);
 
     if (!stranger) {

@@ -1,4 +1,7 @@
-import type { Connection, IConnectionRepository } from '../../domains/connection.js';
+import type {
+  Connection,
+  IConnectionRepository
+} from '../../domains/connection.js';
 
 /**
  * In-memory connection repository for local development and testing

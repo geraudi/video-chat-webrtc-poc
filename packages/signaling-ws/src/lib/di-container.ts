@@ -1,49 +1,65 @@
-import { TursoConnectionRepository } from '../adapters/repositories/turso-connection-repository.js';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { AwsApiGatewaySignalingGateway } from '../adapters/gateways/aws-api-gateway-signaling-gateway.js';
-import { FindStranger } from '../usecases/find-stranger.js';
-import { ForwardMessage } from '../usecases/forward-message.js';
+import { TursoConnectionRepository } from '../adapters/repositories/turso-connection-repository.js';
 import { ConnectPeer } from '../usecases/connect-peer.js';
 import { DisconnectPeer } from '../usecases/disconnect-peer.js';
+import { FindStranger } from '../usecases/find-stranger.js';
+import { ForwardMessage } from '../usecases/forward-message.js';
 
 /**
- * Production dependency injection container.
- * Creates singleton instances of use cases with their dependencies.
+ * Production composition root.
+ * Dependencies are created lazily (getters) so each Lambda only requires
+ * the configuration its own use case consumes: forwarding Lambdas run
+ * without TURSO_* variables, and no Lambda needs DOMAIN_NAME/STAGE since
+ * the callback endpoint comes from the request context.
  */
-let _findStranger: FindStranger | undefined;
-let _forwardMessage: ForwardMessage | undefined;
-let _connectPeer: ConnectPeer | undefined;
-let _disconnectPeer: DisconnectPeer | undefined;
 
-function getRepo() {
-  const dbUrl = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN;
+// The repository is memoized so the Turso client is reused across warm invocations
+let _repo: TursoConnectionRepository | undefined;
 
-  if (!dbUrl || !authToken) {
-    throw new Error('TURSO_DATABASE_URL and TURSO_AUTH_TOKEN environment variables are required');
+function getRepo(): TursoConnectionRepository {
+  if (!_repo) {
+    const dbUrl = process.env.TURSO_DATABASE_URL;
+    const authToken = process.env.TURSO_AUTH_TOKEN;
+
+    if (!dbUrl || !authToken) {
+      throw new Error(
+        'TURSO_DATABASE_URL and TURSO_AUTH_TOKEN environment variables are required'
+      );
+    }
+
+    _repo = new TursoConnectionRepository(dbUrl, authToken);
   }
-
-  return new TursoConnectionRepository(dbUrl, authToken);
+  return _repo;
 }
 
-function getGateway() {
-  const domainName = process.env.DOMAIN_NAME;
-  const stage = process.env.STAGE;
+function getGateway(
+  event: APIGatewayProxyEvent
+): AwsApiGatewaySignalingGateway {
+  const { domainName, stage } = event.requestContext;
 
   if (!domainName || !stage) {
-    throw new Error('DOMAIN_NAME and STAGE environment variables are required');
+    throw new Error(
+      'domainName and stage are missing from the request context'
+    );
   }
 
   return new AwsApiGatewaySignalingGateway(domainName, stage);
 }
 
-export function getUseCases() {
-  const repo = getRepo();
-  const gateway = getGateway();
-
+export function getUseCases(event: APIGatewayProxyEvent) {
   return {
-    findStranger: _findStranger ??= new FindStranger(repo, gateway),
-    forwardMessage: _forwardMessage ??= new ForwardMessage(gateway),
-    connectPeer: _connectPeer ??= new ConnectPeer(repo),
-    disconnectPeer: _disconnectPeer ??= new DisconnectPeer(repo)
+    get findStranger() {
+      return new FindStranger(getRepo(), getGateway(event));
+    },
+    get forwardMessage() {
+      return new ForwardMessage(getGateway(event));
+    },
+    get connectPeer() {
+      return new ConnectPeer(getRepo());
+    },
+    get disconnectPeer() {
+      return new DisconnectPeer(getRepo());
+    }
   };
 }
