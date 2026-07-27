@@ -35,7 +35,7 @@ export function getStrangerId(): string | null {
 }
 
 let onTrackCallback: (event: RTCTrackEvent) => void;
-let onCloseVideoCallback: () => void;
+let onCloseVideoCallback: (reason?: 'replacing' | 'stopping') => void;
 let signaler: ISignaler;
 let role: 'caller' | 'callee';
 
@@ -78,15 +78,23 @@ export function setOnTrackCallBack(callback: (event: RTCTrackEvent) => void) {
   onTrackCallback = callback;
 }
 
-export function setOnCloseVideoCallback(callback: () => void) {
+export function setOnCloseVideoCallback(
+  callback: (reason?: 'replacing' | 'stopping') => void
+) {
   onCloseVideoCallback = callback;
 }
 
 async function createPeerConnection() {
+  const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+  // Using the iceServers array in the RTCPeerConnection method
   myPeerConnection = new RTCPeerConnection({
-    // add your own TURN server here
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    iceServers: iceServers
   });
+
+  // myPeerConnection = new RTCPeerConnection({
+  //   // add your own TURN server here
+  //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  // });
 
   myPeerConnection.onicecandidate = handleICECandidateEvent;
   myPeerConnection.oniceconnectionstatechange =
@@ -368,7 +376,7 @@ function handleHangUpMsg() {
   closeVideoCall();
 }
 
-export function hangUpCall() {
+export function hangUpCall(reason?: 'replacing' | 'stopping') {
   // Capture strangerId BEFORE closeVideoCall() resets it to null
   const currentStrangerId = strangerId;
 
@@ -379,10 +387,10 @@ export function hangUpCall() {
   };
   sendToServer(hangUpMessage);
 
-  closeVideoCall();
+  closeVideoCall(reason);
 }
 
-function closeVideoCall() {
+function closeVideoCall(reason?: 'replacing' | 'stopping') {
   console.log('Closing the call');
 
   if (myPeerConnection) {
@@ -411,7 +419,7 @@ function closeVideoCall() {
     hasRemoteDescription = false;
     remoteIceCandidates = [];
 
-    onCloseVideoCallback();
+    onCloseVideoCallback(reason);
   }
 
   // Drop any deferred match that was waiting on the webcam stream, so a stale

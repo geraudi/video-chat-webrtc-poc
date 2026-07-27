@@ -1,164 +1,230 @@
-import { test, expect, Page, Browser } from '@playwright/test';
-import { webrtcMockScript } from './mocks/webrtc.js';
+import { type Browser, type BrowserContext, type Page, expect } from '@playwright/test';
 
 /**
- * WebRTC helpers for e2e testing.
+ * E2E helpers for the WebRTC video chat.
+ *
+ * Strategy:
+ * - Use the REAL local WebSocket signaling server (started by Playwright's
+ *   `webServer` config) — no client-side WS mock for the happy path.
+ * - Use the REAL browser WebRTC APIs (RTCPeerConnection, getUserMedia). No
+ *   media/transport mocking. Determinism comes from Chromium's fake-device
+ *   mode (`--use-fake-device-for-media-stream`) configured in playwright.config.
+ *
+ * All waits are anchored on user-visible UI changes (button labels, status
+ * text, video srcObject), never on arbitrary timeouts.
  */
 
-// Locator constants for maintainability
-const selectors = {
-  actionButton: 'button:has-text("Start"), button:has-text("Next")',
-  startButton: 'button:has-text("Start")',
-  nextButton: 'button:has-text("Next")',
-  hangUpButton: 'button:has-text("Hang Up")',
+/** Locators derived from the actual DOM (see src/components/video-chat.tsx). */
+export const selectors = {
+  /** The single primary button whose label/state is derived from `stage`. */
+  actionButton: '[data-testid="action-button"]',
+  /** Secondary "Stop" button, visible only in searching/connected stages. */
+  stopButton: 'button:has-text("Stop")',
   localVideo: '[data-testid="local-video"]',
   strangerVideo: '[data-testid="stranger-video"]',
-  connectionStatus: '[data-testid="connection-status"]',
 } as const;
 
 /**
- * Inject WebRTC mocks into a page before navigation.
+ * Intercept the app's TURN-credential fetch (metered.live) and return a minimal
+ * STUN-only config.
+ *
+ * This does NOT mock WebRTC — RTCPeerConnection, ICE, SDP, and getUserMedia
+ * all run for real. It only isolates a third-party credential service so the
+ * tests are deterministic and work offline. On localhost (both pages in the
+ * same browser), host ICE candidates alone are sufficient to establish a real
+ * P2P connection, so no TURN relay is required.
+ *
+ * Must be called BEFORE page.goto() so the route is registered first.
  */
-export const setupWebRtcMocks = async (page: Page): Promise<void> => {
-  await page.addInitScript(webrtcMockScript);
-};
+export async function isolateTurnCredentials(page: Page): Promise<void> {
+  await page.route('**/metered.live/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ urls: 'stun:stun.l.google.com:19302' }]),
+    }),
+  );
+}
 
 /**
- * Navigate both pages to the app simultaneously.
+ * Wait until the app has established its WebSocket connection and reached the
+ * idle ("Ready") stage — i.e. the Start button is present and enabled.
  */
-export const navigateToApp = async (page1: Page, page2: Page): Promise<void> => {
-  await Promise.all([page1.goto('/'), page2.goto('/')]);
-};
+export async function waitForReady(page: Page, timeout = 15000): Promise<void> {
+  const startButton = page.locator(selectors.actionButton);
+  // The button must be visible AND enabled (enabled only when WS is open).
+  await expect(startButton).toBeVisible({ timeout });
+  await expect(startButton).toBeEnabled({ timeout });
+  await expect(startButton).toHaveText('Start', { timeout });
+}
 
 /**
- * Wait for both pages to show the Start/Next button.
+ * Wait until a page transitions into the "searching" stage: the primary
+ * button reads "Looking..." and is disabled, and a "Stop" button appears.
  */
-export const waitForStartButton = async (page1: Page, page2: Page): Promise<void> => {
-  await Promise.all([
-    expect(page1.locator(selectors.actionButton)).toBeVisible(),
-    expect(page2.locator(selectors.actionButton)).toBeVisible(),
-  ]);
-};
+export async function waitForSearching(page: Page, timeout = 10000): Promise<void> {
+  const actionButton = page.locator(selectors.actionButton);
+  await expect(actionButton).toHaveText('Looking...', { timeout });
+  await expect(actionButton).toBeDisabled({ timeout });
+  await expect(page.locator(selectors.stopButton)).toBeVisible({ timeout });
+}
 
 /**
- * Wait for the button to be disabled (Next button disabled state).
+ * Wait until a page transitions into the "connected" stage: the primary
+ * button reads "Next" and is enabled, and the stranger video has a stream
+ * attached (srcObject set by the ontrack handler).
  */
-export const waitForDisabledButton = async (page1: Page, page2: Page): Promise<void> => {
-  await Promise.all([
-    expect(page1.locator(selectors.actionButton)).toBeDisabled(),
-    expect(page2.locator(selectors.actionButton)).toBeDisabled(),
-  ]);
-};
+export async function waitForConnected(page: Page, timeout = 30000): Promise<void> {
+  const actionButton = page.locator(selectors.actionButton);
+  await expect(actionButton).toHaveText('Next', { timeout });
+  await expect(actionButton).toBeEnabled({ timeout });
+  // The remote video element receives a srcObject (a real MediaStream) once
+  // ontrack fires after the real P2P connection is established.
+  await expect
+    .poll(
+      async () =>
+        page.locator(selectors.strangerVideo).evaluate(
+          (el) => (el as HTMLVideoElement).srcObject != null,
+        ),
+      { timeout },
+    )
+    .toBe(true);
+}
 
 /**
- * Click the action button (Start or Next) on both pages.
+ * Shape of the local signaling server's GET /health response.
  */
-export const clickActionBtn = async (page1: Page, page2: Page): Promise<void> => {
-  await Promise.all([
-    page1.locator(selectors.actionButton).click(),
-    page2.locator(selectors.actionButton).click(),
-  ]);
-};
+export interface ServerHealth {
+  /** Total connected WebSocket peers. */
+  peers: number;
+  /** Peers currently waiting in the matching pool (sent START, no match yet). */
+  available: number;
+}
 
 /**
- * Click "Start" on both pages and wait for video chat UI.
+ * Read the local signaling server's /health endpoint.
+ *
+ * Returns `{ peers: -1, available: -1 }` on fetch error so callers can poll
+ * without try/catch; a real server always reports non-negative counts.
  */
-export const startVideoChat = async (
-  page1: Page,
-  page2: Page,
-  timeout = 10000,
-): Promise<void> => {
-  await clickActionBtn(page1, page2);
-
-  await Promise.all([
-    expect(page1.locator(selectors.localVideo)).toBeVisible({ timeout }),
-    expect(page2.locator(selectors.localVideo)).toBeVisible({ timeout }),
-  ]);
-};
+export async function getServerHealth(): Promise<ServerHealth> {
+  try {
+    const res = await fetch('http://localhost:3001/health');
+    return (await res.json()) as ServerHealth;
+  } catch {
+    return { peers: -1, available: -1 };
+  }
+}
 
 /**
- * Hang up and reconnect both peers.
+ * Poll the local signaling server's /health endpoint and resolve as soon as
+ * it reports at least `minAvailable` available (waiting) connections.
  */
-export const hangUpAndReconnect = async (
-  page1: Page,
-  page2: Page,
-  timeout = 10000,
-): Promise<void> => {
-  // Click hang up buttons
-  await Promise.all([
-    page1.locator(selectors.hangUpButton).click().catch(() => {}),
-    page2.locator(selectors.hangUpButton).click().catch(() => {}),
-  ]);
-
-  // Click start again
-  await clickActionBtn(page1, page2);
-
-  // Wait for reconnection
-  await Promise.all([
-    expect(page1.locator(selectors.localVideo)).toBeVisible({ timeout }),
-    expect(page2.locator(selectors.localVideo)).toBeVisible({ timeout }),
-  ]);
-};
+async function waitForServerAvailable(
+  minAvailable: number,
+  timeout = 5000,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const data = await getServerHealth();
+        console.log('[DEBUG waitForServerAvailable]', JSON.stringify(data));
+        return data.available;
+      },
+      { timeout, intervals: [200, 500, 1000] },
+    )
+    .toBeGreaterThanOrEqual(minAvailable);
+}
 
 /**
- * Verify video elements exist on both pages.
+ * Click Start on both pages to trigger peer matching via the real server.
+ *
+ * The clicks are STAGGERED and synchronized on SERVER state (not just client
+ * UI): page1 clicks first, then we wait until the server reports page1 as an
+ * available peer (via /health), and ONLY THEN page2 clicks.
+ *
+ * This closes the race where the client UI flips to "Looking..." optimistically
+ * (before the START message reaches the server), causing two near-simultaneous
+ * START messages to both see no available peer and both wait forever.
  */
-export const verifyVideoPresent = async (
-  page1: Page,
-  page2: Page,
-): Promise<void> => {
-  const [count1, count2] = await Promise.all([
-    page1.locator(selectors.localVideo).count(),
-    page2.locator(selectors.localVideo).count(),
-  ]);
-
-  expect(count1).toBeGreaterThan(0);
-  expect(count2).toBeGreaterThan(0);
-};
+export async function clickStartOnBoth(page1: Page, page2: Page): Promise<void> {
+  await page1.locator(selectors.actionButton).click();
+  await waitForSearching(page1);
+  // Wait until the server has ACTUALLY registered page1 as available before
+  // letting page2 click — the UI wait alone is not sufficient.
+  await waitForServerAvailable(1);
+  await page2.locator(selectors.actionButton).click();
+}
 
 /**
- * Create a pair of WebRTC-mocked browser contexts.
+ * Verify the local webcam video has a real MediaStream attached.
  */
-export const createMockedPeerPair = async (
+export async function expectLocalVideoReady(page: Page, timeout = 10000): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.locator(selectors.localVideo).evaluate(
+          (el) => (el as HTMLVideoElement).srcObject != null,
+        ),
+      { timeout },
+    )
+    .toBe(true);
+}
+
+/**
+ * Create a pair of pages (same browser context) for a two-peer test.
+ *
+ * Permissions are granted at context level (camera/microphone), and Chromium's
+ * fake-device flags (set in playwright.config) provide deterministic media
+ * without any physical hardware. No WebRTC mocking is performed.
+ */
+export async function createPeerPages(
   browser: Browser,
-): Promise<{
-  context1: any;
-  context2: any;
-  page1: Page;
-  page2: Page;
-}> => {
-  const context1 = await browser.newContext();
-  const context2 = await browser.newContext();
+): Promise<{ context: BrowserContext; page1: Page; page2: Page }> {
+  const context = await browser.newContext({
+    permissions: ['camera', 'microphone'],
+  });
+  const page1 = await context.newPage();
+  const page2 = await context.newPage();
 
-  const page1 = await context1.newPage();
-  const page2 = await context2.newPage();
-
-  await setupWebRtcMocks(page1);
-  await setupWebRtcMocks(page2);
-
-  return { context1, context2, page1, page2 };
-};
+  return { context, page1, page2 };
+}
 
 /**
- * Clean up browser contexts.
+ * Navigate both pages to the app and wait until both reach the "Ready" state.
  */
-export const cleanupPeerPair = async (
-  context1: any,
-  context2: any,
-): Promise<void> => {
-  await context1.close();
-  await context2.close();
-};
+export async function openAppOnBoth(page1: Page, page2: Page): Promise<void> {
+  await Promise.all([page1.goto('/'), page2.goto('/')]);
+  await Promise.all([waitForReady(page1), waitForReady(page2)]);
+  // Both local webcams should be initialized by now.
+  await Promise.all([expectLocalVideoReady(page1), expectLocalVideoReady(page2)]);
+}
 
 /**
- * Extended test fixture with WebRTC mocking support.
+ * Poll the local signaling server's /health endpoint until it reports zero
+ * connected peers and zero available (waiting) connections.
+ *
+ * The signaling server is shared across tests (reuseExistingServer: true).
+ * When a test closes its browser context, the WebSocket `close` events fire
+ * asynchronously and the server's DisconnectPeer use case runs as a
+ * fire-and-forget promise. If the next test starts before those disconnects
+ * are processed, its peers can cross-match with "ghost" peers from the
+ * previous test. Waiting for the server to be idle makes the suite
+ * deterministic.
  */
-export const e2eTest = test.extend<{ peers: Awaited<ReturnType<typeof createMockedPeerPair>> }>({
-  peers: async ({ browser }, use) => {
-    const peers = await createMockedPeerPair(browser);
-    await use(peers);
-    await cleanupPeerPair(peers.context1, peers.context2);
-  },
-});
-
-export { selectors };
+export async function waitForServerIdle(timeout = 5000): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        try {
+          const res = await fetch('http://localhost:3001/health');
+          const data = (await res.json()) as { peers: number; available: number };
+          return data.peers + data.available;
+        } catch {
+          return -1;
+        }
+      },
+      { timeout },
+    )
+    .toBe(0);
+}

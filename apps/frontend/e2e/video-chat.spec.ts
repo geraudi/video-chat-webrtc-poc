@@ -1,276 +1,239 @@
-import { test, expect, Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import {
+  clickStartOnBoth,
+  createPeerPages,
+  expectLocalVideoReady,
+  getServerHealth,
+  isolateTurnCredentials,
+  openAppOnBoth,
+  selectors,
+  waitForConnected,
+  waitForReady,
+  waitForSearching,
+  waitForServerIdle,
+} from './helpers';
 
-// Helper: simulate a WebSocket message stream between two Playwright pages
-async function emulateWs(
-  sender: Page,
-  receiver: Page,
-  opts: { delay?: number; filterFn?: string } = {}
-): Promise<{ stop: () => void }> {
-  const { delay = 30, filterFn = `() => true` } = opts;
+/**
+ * After each test, wait until the shared signaling server has no lingering
+ * peers. Browser-context close triggers async WebSocket disconnects on the
+ * server; without waiting, the next test's peers could match ghost peers.
+ */
+test.afterEach(async () => {
+  await waitForServerIdle();
+});
 
-  const leftHandler = sender.evaluateHandle(() => {
-    const original = (window as any).WebSocket;
-    if (!(original && (original as any).__playwright)) return null;
-    // monkey-patch to capture open sockets
-    let captured = null;
-    const Patched = function (url: string, protocols: any) {
-      (this as any).url = url;
-      (this as any)._pProtocols = protocols;
-      const real = new original(url, protocols);
-      ;(this as any)._real = real;
-      Object.getOwnPropertyNames(real).forEach((k: string) => {
-        (this as any)[k] = real[k];
-      });
-    };
-    Patched.prototype = original.prototype;
-    (window as any).WebSocket = Patched as any;
-    return null;
-  });
+/**
+ * End-to-end tests for the WebRTC video chat.
+ *
+ * These tests exercise the REAL local WebSocket signaling server
+ * (ws://localhost:3001, started by Playwright's `webServer` config), the REAL
+ * signaling/matching logic, AND the REAL browser WebRTC stack
+ * (RTCPeerConnection, ICE/SDP negotiation, getUserMedia). Determinism comes
+ * from Chromium's fake-device media mode — no WebRTC APIs are mocked.
+ */
 
-  // Simpler approach: use browser context to share a single mock WS
-  const ctx1 = sender.context();
-  const ctx2 = receiver.context();
-  // Both pages share the same BrowserContext in our setup (we'll open tabs from the same context)
-  // Actually Playwright creates separate contexts. Use page.evaluate to install mocks on both sides.
+test.describe('Video Chat — full peer-to-peer flow', () => {
+  test('two users are matched and reach a connected video call through the real signaling server', async ({
+    browser,
+  }) => {
+    const { context, page1, page2 } = await createPeerPages(browser);
+    try {
+      // Isolate the third-party TURN credential service. WebRTC itself runs
+      // against the real browser stack — only this fetch is stubbed.
+      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await openAppOnBoth(page1, page2);
 
-  // Best approach: just evaluate a real WebSocket mock on both pages that forwards messages via CDPSession or postMessage
-  // Let's use a shared InMemoryChannel via JS evaluation
+      // Trigger matching on both sides via the real server.
+      await clickStartOnBoth(page1, page2);
 
-  // Actually the simplest: inject a global message bus and use page.exposeFunction + listen
-  const messages: Array<{ from: string; data: string }> = [];
+      // Both peers should converge on the "connected" stage, with the remote
+      // video stream attached — proving the full signaling exchange
+      // (START → initOffer → videoOffer → videoAnswer → ICE) succeeded.
+      await waitForConnected(page1);
+      await waitForConnected(page2);
 
-  // Install a simple forwarding hook on each page
-  await sender.evaluate(async ({ script, urlPattern }) => {
-    // Replace WebSocket constructor entirely
-    const handlers: Array<(conn: { send: Function; onClose?: Function }) => void> = [];
-    let closed = false;
+      // The local webcam must remain attached throughout the call.
+      await expectLocalVideoReady(page1);
+      await expectLocalVideoReady(page2);
 
-    class FakeWebSocket {
-      static instances: FakeWebSocket[] = [];
-      _url: string;
-      _readyState: number = 0; // CONNECTING
-      onopen: ((ev: any) => any) | null = null;
-      onmessage: ((ev: any) => any) | null = null;
-      onclose: ((ev: any) => any) | null = null;
-      onerror: ((ev: any) => any) | null = null;
-
-      constructor(url: string) {
-        this._url = url;
-        FakeWebSocket.instances.push(this);
-
-        // Simulate CONNECTING → OPEN after 0ms (sync, no timers)
-        this._readyState = 0; // CONNECTING
-        setTimeout(() => {
-          if (closed) return;
-          this._readyState = 1; // OPEN
-          if (this.onopen) this.onopen({} as any);
-          // Auto-accept messages from the other side via shared window storage
-          // Use a shared Map on globalThis keyed by url
-          const registry = (globalThis as any).__ws_registry ||= {};
-          registry[url] = this;
-        }, 0);
-      }
-
-      get url() { return this._url; }
-      get readyState() { return this._readyState; }
-
-      send(data: string) {
-        // Deliver to the matching page's message handler
-        const targetUrl = Object.keys((globalThis as any).__ws_registry || {}).find(
-          k => k !== this._url
-        );
-        if (targetUrl) {
-          const target = (globalThis as any).__ws_registry?.[targetUrl];
-          if (target && target.onmessage) {
-            target.onmessage({ data });
-          }
-        }
-      }
-
-      close() {
-        closed = true;
-        this._readyState = 3; // CLOSED
-        if (this.onclose) this.onclose({});
-      }
+      // The status indicator should reflect an active call.
+      await expect(page1.locator('span:has-text("Connected to stranger")')).toBeVisible();
+      await expect(page2.locator('span:has-text("Connected to stranger")')).toBeVisible();
+    } finally {
+      await context.close();
     }
-
-    (window as any).FakeWebSocket = FakeWebSocket;
-    (window as any).WebSocket = FakeWebSocket as any;
-
-    // Shared registry for inter-page messages
-    (globalThis as any).__ws_registry ||= {};
-  }, { script: '', urlPattern: '' });
-
-  // Wait a tick for the mock to install and open
-  await new Promise((r) => setTimeout(r, delay));
-
-  return {
-    stop: () => {}
-  };
-}
-
-// Debug helper: dump all buttons on the page
-async function debugButtons(page: Page) {
-  const buttons = await page.evaluate(() => {
-    const els = Array.from(document.querySelectorAll('button'));
-    return els.map((b) => ({
-      text: b.textContent?.trim() ?? '',
-      disabled: b.disabled,
-      id: b.id,
-      className: b.className
-    }));
-  });
-  return buttons;
-}
-
-// Helper to wait until the connection status shows Connected
-async function waitForConnectedState(page1: Page, page2: Page, timeout = 5000) {
-  // Both tabs connect independently; we just wait until they show "Connected" (WS OPEN)
-  const [r1, r2] = await Promise.all([
-    page1.waitForSelector('.connected-status', { timeout }),
-    page2.waitForSelector('.connected-status', { timeout })
-  ]);
-}
-
-// ===== TESTS =====
-
-test.describe('Video Chat', () => {
-  test('two users can find each other and start a video call', async ({ browser }) => {
-    const context = await browser.newContext();
-    const page1 = await context.newPage();
-    const page2 = await context.newPage();
-
-    // Install the mock WebRTC on both pages BEFORE loading the app
-    await page1.addInitScript(() => {
-      // Mock RTCPeerConnection
-      const fakeConn = () => ({
-        createOffer: async () => ({ sdp: 'o=mock' }),
-        createAnswer: async () => ({ sdp: 'a=answer' }),
-        setLocalDescription: async () => {},
-        localDescription: { sdp: 'o=local' },
-        remoteDescription: null,
-        onicecandidate: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        close: () => {},
-        ontrack: null,
-        oniceconnectionstatechange: null,
-        onsignalingstatechange: null,
-        ondatachannel: null,
-      });
-      (window as any).RTCPeerConnection = class RTCPeerConnection {
-        constructor() { Object.assign(this, fakeConn()); }
-        static iceServers = () => [];
-      };
-      
-      // Mock MediaStream
-      (window as any).MediaStream = class MediaStream {
-        getTracks() { return []; }
-        addTrack() {}
-      };
-      // Mock getUserMedia
-      (navigator as any).mediaDevices = {
-        getUserMedia: async () => ({
-          getTracks: () => [],
-          id: 'mock-stream'
-        })
-      };
-    });
-
-    await page2.addInitScript(() => {
-      const fakeConn = () => ({
-        createOffer: async () => ({ sdp: 'o=mock' }),
-        createAnswer: async () => ({ sdp: 'a=answer' }),
-        setLocalDescription: async () => {},
-        localDescription: { sdp: 'o=local' },
-        remoteDescription: null,
-        onicecandidate: null,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        close: () => {},
-        ontrack: null,
-        oniceconnectionstatechange: null,
-        onsignalingstatechange: null,
-        ondatachannel: null,
-      });
-      (window as any).RTCPeerConnection = class RTCPeerConnection {
-        constructor() { Object.assign(this, fakeConn()); }
-        static iceServers = () => [];
-      };
-      (window as any).MediaStream = class MediaStream {
-        getTracks() { return []; }
-        addTrack() {}
-      };
-      (navigator as any).mediaDevices = {
-        getUserMedia: async () => ({
-          getTracks: () => [],
-          id: 'mock-stream'
-        })
-      };
-    });
-
-    // Navigate both pages to the app running on localhost
-    await Promise.all([
-      page1.goto('http://localhost:5173'),
-      page2.goto('http://localhost:5173')
-    ]);
-
-    // Wait until both tabs show Connected
-    await waitForConnectedState(page1, page2);
-
-    // Click Start on BOTH sides to trigger matching (START message)
-    await Promise.all([
-      page1.click('[data-testid="start-button"]'),
-      page2.click('[data-testid="start-button"]')
-    ]);
-
-    // After matching + signaling flow, both should see "Connected" + video elements populated
-    const localVideo = await page1.locator('[data-testid="local-video"]').elementRef();
-    const strangerVideo = await page1.locator('[data-testid="stranger-video"]').elementRef();
-    await Promise.all([
-      expect(strangerVideo).not.toBeEmpty()
-    ]);
   });
 
-  test('button state transitions correctly during call flow', async ({ browser }) => {
-    const context = await browser.newContext();
+  test('Start button is disabled before the WebSocket connects, then becomes enabled', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      permissions: ['camera', 'microphone'],
+    });
     const page = await context.newPage();
+    try {
+      // Block the WebSocket so it never connects, simulating a slow/unavailable
+      // signaling server. This is an error-scenario test — the only allowed
+      // use of transport interception. No WebRTC APIs are mocked.
+      await page.routeWebSocket('ws://localhost:3001/**', (ws) => {
+        // Never call ws.connectToServer(): the client connection stays
+        // blocked/closed, so readyState never reaches OPEN.
+        ws.close();
+      });
 
-    // Install mocks
-    await page.addInitScript(() => {
-      (window as any).RTCPeerConnection = class RTCPeerConnection {
-        constructor() {}
-        static iceServers = () => [];
-      };
-      (window as any).MediaStream = class MediaStream { getTracks() { return []; } addTrack() {} };
-      (navigator as any).mediaDevices = {
-        getUserMedia: async () => ({ getTracks: () => [], id: 'mock' })
-      };
+      await page.goto('/');
+
+      // The Start button should be visible but disabled while WS is down.
+      const startButton = page.locator(selectors.actionButton);
+      await expect(startButton).toBeVisible();
+      await expect(startButton).toBeDisabled();
+      await expect(startButton).toHaveText('Start');
+      // The status should read "Disconnected".
+      await expect(page.locator('span:has-text("Disconnected")')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('clicking Start transitions the UI to the "Looking..." searching stage', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      permissions: ['camera', 'microphone'],
     });
+    const page = await context.newPage();
+    try {
+      await isolateTurnCredentials(page);
+      await page.goto('/');
+      await waitForReady(page);
 
-    await page.goto('http://localhost:5173');
+      // Click Start. Because this page is alone (no second peer), it should
+      // enter the "searching" stage and stay there waiting for a match.
+      await page.locator(selectors.actionButton).click();
 
-    // Phase 1: Waiting → Start button visible
-    const startBtn = page.locator('[data-testid="start-button"]');
-    await expect(startBtn).toBeVisible();
-    let buttonText = await startBtn.textContent();
-    console.log('Button text (Phase 1 - Waiting):', buttonText);
-    await expect(startBtn).toBeEnabled();
+      await waitForSearching(page);
 
-    // Click Start → should transition to Looking...
-    await startBtn.click();
-    await page.waitForTimeout(500); // Allow React re-render
+      // The status indicator should reflect the searching state.
+      await expect(page.locator('span:has-text("Looking for peer...")')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
 
-    // Phase 2: Looking for peer → Next button (disabled) + Stop visible
-    const nextBtn = page.locator('[data-testid="next-button"]');
-    const isNextVisible = await nextBtn.isVisible();
-    buttonText = await nextBtn.textContent();
-    console.log('Button text after click:', buttonText);
-    console.log('Next button visible:', isNextVisible);
+  test('Stop returns a searching user to the idle stage with the Start button', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      permissions: ['camera', 'microphone'],
+    });
+    const page = await context.newPage();
+    try {
+      await isolateTurnCredentials(page);
+      await page.goto('/');
+      await waitForReady(page);
 
-    // If the test expects phase transition, verify the status text changed
-    const statusText = page.locator('.connected-status');
-    const newStatus = await statusText.textContent();
-    console.log('Status after click:', newStatus);
+      await page.locator(selectors.actionButton).click();
+      await waitForSearching(page);
+
+      // Sanity check: while searching, this peer is in the server's matching
+      // pool (it sent START).
+      await expect
+        .poll(async () => (await getServerHealth()).available, {
+          timeout: 5000,
+          intervals: [200, 500, 1000],
+        })
+        .toBeGreaterThanOrEqual(1);
+
+      // Capture the available count, then click Stop to cancel the search.
+      const availableBeforeStop = (await getServerHealth()).available;
+      await page.locator(selectors.stopButton).click();
+
+      // UI: should return to idle — Start button visible/enabled, Stop gone.
+      await waitForReady(page);
+      await expect(page.locator(selectors.stopButton)).toHaveCount(0);
+
+      // Behavioral guarantee of the onStop fix: the peer must NOT have sent a
+      // second START (which would re-enter the matching pool). After a short
+      // settle window, available must have dropped (the search was cancelled)
+      // and must NOT climb back above its pre-Stop level.
+      await page.waitForTimeout(500);
+      const healthAfterStop = await getServerHealth();
+      expect(healthAfterStop.available).toBeLessThanOrEqual(availableBeforeStop);
+      expect(healthAfterStop.available).toBeLessThan(availableBeforeStop);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+test.describe('Video Chat — Next (re-match) flow', () => {
+  test('clicking Next during a call tears down and re-establishes a new connection', async ({
+    browser,
+  }) => {
+    const { context, page1, page2 } = await createPeerPages(browser);
+    try {
+      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await openAppOnBoth(page1, page2);
+      await clickStartOnBoth(page1, page2);
+      await waitForConnected(page1);
+      await waitForConnected(page2);
+
+      // Click Next on page1 — should tear down the current call (hangUpCall)
+      // and immediately re-enter the matching pool (onCloseVideo → startChat).
+      await page1.locator(selectors.actionButton).click();
+
+      // With only 2 peers, both sides go through teardown → startChat →
+      // re-match with each other. We verify the full teardown + re-establish
+      // cycle succeeds by waiting for both to reach "connected" again.
+      //
+      // NOTE: We intentionally do NOT assert on the transient "Looking..."
+      // stage here. With only 2 peers the searching window is sub-100ms and
+      // observing it would be inherently flaky. A deterministic "searches for
+      // a NEW peer" test requires a 3rd peer (see missing scenarios below).
+      await waitForConnected(page1);
+      await waitForConnected(page2);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('clicking Stop during a connected call returns the clicking peer to idle', async ({
+    browser,
+  }) => {
+    const { context, page1, page2 } = await createPeerPages(browser);
+    try {
+      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await openAppOnBoth(page1, page2);
+      await clickStartOnBoth(page1, page2);
+      await waitForConnected(page1);
+      await waitForConnected(page2);
+
+      // While connected, neither peer is in the matching pool.
+      const availableBeforeStop = (await getServerHealth()).available;
+
+      // page2 clicks Stop — should send hangUp to page1 and return page2 to
+      // idle WITHOUT re-entering the matching pool (the onStop guarantee).
+      await page2.locator(selectors.stopButton).click();
+
+      // page2 should return to idle (Start button visible + enabled).
+      await waitForReady(page2);
+
+      // Behavioral guarantee of the onStop fix: page2 must NOT have sent a
+      // START after the hangUp, so the matching pool must not have grown.
+      // (Before the fix, onStop → onCloseVideo → startChat() would push page2
+      // back into the available pool, defeating the stop.)
+      await page2.waitForTimeout(500);
+      const availableAfterStop = (await getServerHealth()).available;
+      expect(availableAfterStop).toBeLessThanOrEqual(availableBeforeStop);
+
+      // The remote peer (page1) receives the hangUp. With only 2 peers its
+      // terminal state is non-deterministic (it may auto-re-search or idle),
+      // so we assert only that page1 left the connected stage.
+      await expect(page1.locator(selectors.actionButton)).not.toHaveText('Next', {
+        timeout: 5000,
+      });
+    } finally {
+      await context.close();
+    }
   });
 });

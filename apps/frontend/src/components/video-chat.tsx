@@ -20,7 +20,7 @@ type ButtonConfig = {
   label: string;
   action: "start" | "next" | "stop";
   disabled: boolean;
-};
+};  
 
 export function VideoChat({
   localCam,

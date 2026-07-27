@@ -80,11 +80,18 @@ export function useVideoChat() {
   };
 
   // Callback when video call ends (peer disconnected or hangup)
-  const onCloseVideo = useCallback((_reason?: 'replacing' | undefined) => {
+  const onCloseVideo = useCallback((reason?: 'replacing' | 'stopping') => {
     if (strangerCam.current) {
       strangerCam.current.srcObject = null;
       strangerCam.current.src = '';
     }
+
+    // User explicitly stopped → return to idle, do NOT auto-reconnect.
+    if (reason === 'stopping') {
+      setStage('idle');
+      return;
+    }
+
     // Call ended → peer disconnected, transition to searching for new peer
     startChat();
     setStage('searching');
@@ -108,10 +115,10 @@ export function useVideoChat() {
     hangUpCall();
   }, []);
 
-  // Hang up without starting a new search
+  // Stop button clicked: disconnect the current call and return to idle.
+  // Passing 'stopping' so onCloseVideo returns to idle instead of re-searching.
   const onStop = useCallback(() => {
-    hangUpCall();
-    setStage('idle');
+    hangUpCall('stopping');
   }, []);
 
   // Initialize websocket connection

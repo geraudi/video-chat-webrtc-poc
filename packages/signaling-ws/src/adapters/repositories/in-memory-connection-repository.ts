@@ -48,6 +48,19 @@ export class InMemoryConnectionRepository implements IConnectionRepository {
   }
 
   /**
+   * Count how many connections are currently flagged as available (waiting
+   * for a match). Used by the local server's /health endpoint so tests can
+   * synchronize on real matching state.
+   */
+  countAvailable(): number {
+    let count = 0;
+    for (const conn of this.store.values()) {
+      if (conn.isAvailable) count++;
+    }
+    return count;
+  }
+
+  /**
    * Clear all connections (useful for testing)
    */
   clear(): void {
