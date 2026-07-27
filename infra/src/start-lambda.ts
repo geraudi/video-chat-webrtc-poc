@@ -1,4 +1,3 @@
-import { NodejsFunction } from '@exanubes/pulumi-nodejs-function';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Actions } from '@repo/signaling-types/messages';
@@ -9,6 +8,7 @@ import {
   getLambdaName,
   getRouteName
 } from './helpers';
+import { NodejsFunction } from './lib/nodejs-function';
 
 export function getStartLambda(
   api: aws.apigatewayv2.Api,

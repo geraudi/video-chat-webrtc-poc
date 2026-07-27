@@ -23,9 +23,9 @@ const result = await esbuild.build({
   bundle: true,
   outdir: distDir,
   platform: 'node',
-  target: 'node20',
   // No `format`: defaults to CJS, which the Lambda runtime loads without
   // an ESM package.json marker and where require() of built-ins just works
+  target: 'node24',
   minify: true,
   // .map files ship in the zip so NODE_OPTIONS=--enable-source-maps
   // (set by the infra) produces readable stack traces

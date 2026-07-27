@@ -1,6 +1,6 @@
-import { NodejsFunction } from '@exanubes/pulumi-nodejs-function';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { NodejsFunction } from './lib/nodejs-function';
 
 export function getConnectLambda(
   api: aws.apigatewayv2.Api,

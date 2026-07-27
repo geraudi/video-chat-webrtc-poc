@@ -1,7 +1,7 @@
-import { NodejsFunction } from '@exanubes/pulumi-nodejs-function';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Actions } from '@repo/signaling-types/messages';
+import { NodejsFunction } from './lib/nodejs-function';
 
 export function getHangUpLambda(
   api: aws.apigatewayv2.Api,

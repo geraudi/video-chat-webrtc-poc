@@ -105,9 +105,6 @@ importers:
 
   infra:
     dependencies:
-      '@exanubes/pulumi-nodejs-function':
-        specifier: ^1.0.10
-        version: 1.0.10(@pulumi/aws@7.37.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3))(@pulumi/pulumi@3.253.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3))(esbuild@0.28.1)
       '@pulumi/aws':
         specifier: ^7.37.0
         version: 7.37.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3)
@@ -696,13 +693,6 @@ packages:
   '@eslint/plugin-kit@0.7.2':
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@exanubes/pulumi-nodejs-function@1.0.10':
-    resolution: {integrity: sha512-K75w3Ory0BnxXOtuQo8h20jwNiJfHQjH9NLyL1kL7bTDMKa4a1TQR6qFofv2CX8XqAaS52Ly4A+cyu1wEEaI1w==}
-    peerDependencies:
-      '@pulumi/aws': '>=6.0.0'
-      '@pulumi/pulumi': '>=3.0.0'
-      esbuild: '>=0.21.5'
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -4722,12 +4712,6 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
-
-  '@exanubes/pulumi-nodejs-function@1.0.10(@pulumi/aws@7.37.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3))(@pulumi/pulumi@3.253.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3))(esbuild@0.28.1)':
-    dependencies:
-      '@pulumi/aws': 7.37.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3)
-      '@pulumi/pulumi': 3.253.0(ts-node@10.9.2(@types/node@26.1.1)(typescript@5.9.3))(typescript@5.9.3)
-      esbuild: 0.28.1
 
   '@floating-ui/core@1.8.0':
     dependencies:
