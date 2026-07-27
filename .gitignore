@@ -21,3 +21,5 @@ dist
 infra/outputs.json
 
 playwright-report
+test-results
+sandbox
