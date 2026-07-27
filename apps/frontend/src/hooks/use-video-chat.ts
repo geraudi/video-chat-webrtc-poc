@@ -32,7 +32,7 @@ const mediaConstraints = {
 
 /**
  * Single source of truth for the UI state machine.
- * 
+ *
  * Stage transitions:
  * - idle → searching (onStart)
  * - searching → connected (peer video received)
@@ -80,18 +80,15 @@ export function useVideoChat() {
   };
 
   // Callback when video call ends (peer disconnected or hangup)
-  const onCloseVideo = useCallback(
-    (_reason?: 'replacing' | undefined) => {
-      if (strangerCam.current) {
-        strangerCam.current.srcObject = null;
-        strangerCam.current.src = '';
-      }
-      // Call ended → peer disconnected, transition to searching for new peer
-      startChat();
-      setStage('searching');
-    },
-    []
-  );
+  const onCloseVideo = useCallback((_reason?: 'replacing' | undefined) => {
+    if (strangerCam.current) {
+      strangerCam.current.srcObject = null;
+      strangerCam.current.src = '';
+    }
+    // Call ended → peer disconnected, transition to searching for new peer
+    startChat();
+    setStage('searching');
+  }, []);
 
   // Start button clicked: make this peer available for matching
   const onStart = useCallback(() => {

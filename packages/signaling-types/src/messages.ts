@@ -37,13 +37,13 @@ export interface VideoOfferOutputMessage extends Message {
 export interface VideoAnswerInputMessage extends Message {
   action: Actions.VIDEO_ANSWER;
   sdp: RTCSessionDescription;
-  strangerId: string;
+  senderId: string;
 }
 
 export interface VideoAnswerOutputMessage extends Message {
   action: Actions.VIDEO_ANSWER;
   sdp: RTCSessionDescription;
-  senderId: string;
+  strangerId: string;
 }
 
 export interface NewIceCandidateMessage extends Message {
