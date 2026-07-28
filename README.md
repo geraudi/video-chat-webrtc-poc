@@ -1,84 +1,109 @@
-# Turborepo + Pulumi
+# Video Chat (WebRTC) — Turborepo + Pulumi
 
-Video chat (WebRTC) example with Turborepo and Pulumi.
+A WebRTC video chat (peer-to-peer, randomized stranger matching) built as a pnpm/Turborepo monorepo and deployed to AWS with Pulumi.
 
-- AWS API Gateway with Websockets.
-- Turso database.
-- Front: React + TypeScript + Vite.
+## Stack
 
-1. Install turbo repo globally
-https://turbo.build/repo/docs/getting-started/installation
-```pnpm install turbo --global```
+- **Frontend:** React 19 + TypeScript + Vite (`apps/frontend`)
+- **Signaling:** AWS API Gateway (WebSockets) + Lambda (`packages/signaling-ws`)
+- **Database:** Turso (libSQL)
+- **Infra:** Pulumi → API Gateway, Lambda, S3 static website (`infra`)
 
-2. Install dependencies
-```pnpm i```
+## Workspace layout
 
-3. Install Pulumi
-```brew install pulumi/tap/pulumi```
-
-4. Configure AWS credential
-https://www.pulumi.com/registry/packages/aws/installation-configuration
-
-4. Deploy stask
 ```
+apps/frontend              React + Vite frontend
+packages/signaling-ws      Lambda handlers + local dev server
+packages/signaling-types   Shared message types
+packages/typescript-config Shared tsconfigs
+infra                      Pulumi IaC
+```
+
+## Prerequisites
+
+- **Node** ≥ 18, **pnpm** 9
+- **Turborepo** (global): `pnpm install turbo --global` — [docs](https://turbo.build/repo/docs/getting-started/installation)
+- **Pulumi:** `brew install pulumi/tap/pulumi`
+- **AWS credentials** configured for Pulumi — [setup](https://www.pulumi.com/registry/packages/aws/installation-configuration)
+
+## Install
+
+```bash
+pnpm install
+```
+
+## Common commands
+
+Run from the repo root:
+
+```bash
+pnpm dev           # start frontend + local signaling server (persistent)
+pnpm build         # build all packages
+pnpm lint          # lint all packages (biome)
+pnpm check-types   # type-check all packages
+pnpm clean         # remove node_modules / build caches
+```
+
+## Local development (no AWS required)
+
+The frontend talks to a local WebSocket signaling server (in-memory store, no Turso needed). The frontend selects the target via `VITE_LOCAL_MODE`.
+
+**1. Start the local signaling server** (port `3001`):
+
+```bash
+pnpm --filter @repo/signaling-ws dev
+```
+
+**2. Start the frontend** (port `5173`):
+
+```bash
+pnpm --filter @repo/frontend dev:local   # sets VITE_LOCAL_MODE=true
+```
+
+Open `http://localhost:5173` in **two tabs/windows** to test a call between peers. Video/audio connect directly P2P via WebRTC; only signaling is local.
+
+### Frontend env (`apps/frontend/.env`)
+
+| Variable           | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `VITE_LOCAL_MODE`  | `true` → connect to `ws://localhost:3001`. `false` → use AWS endpoint.     |
+| `VITE_SIGNALING_URL` | AWS API Gateway WebSocket URL (e.g. `wss://…/dev`). Ignored in local mode. |
+
+## Deploy to AWS
+
+Always deploy from the repo root via Turborepo — it builds the dependencies first (lints, then builds `signaling-types`, `signaling-ws` → `dist/`, and `frontend`) **before** running Pulumi. `signaling-ws#build` regenerates the per-Lambda bundles in `dist/` that Pulumi zips; skipping it deploys stale or missing artifacts.
+
+```bash
+pnpm deploy          # root script → turbo deploy (build deps, then pulumi up --yes)
+```
+
+> ⚠️ Do **not** run `cd infra && pnpm deploy` directly — that runs only `pulumi up --yes` without building `signaling-ws`'s `dist/`.
+
+After deploy, the WebSocket endpoint is written to `infra/outputs.json` (key: `apiEndpoint`).
+
+### Pulumi configuration
+
+Config lives in `infra/Pulumi.dev.yaml`. Required keys (set before first deploy):
+
+```bash
 cd infra
-pnpm run deploy
-```
-
-test websocket
-The websocket url can find here: infra/outputs.json
-wscat -c wss://4l60aayocd.execute-api.us-east-1.amazonaws.com/dev/
-
-4. Deploy infra
-```turbo run deploy```
-
-
-### DB Turso
-Usefully commands: 
-
-```
-turso db show --url my-turborepo 
-turso db tokens create my-turborepo
-turso db tokens invalidate
-```
-
-### Local Development (No AWS Deployment Required)
-
-You can run the entire application locally without deploying to AWS:
-
-**1. Start the local signaling server:**
-```bash
-cd packages/signaling-ws
-pnpm install  # Install tsx and ws if not already installed
-node local-server.mjs
-# Server starts on http://localhost:3001
-```
-
-**2. In a separate terminal, start the frontend in local mode:**
-```bash
-cd apps/frontend
-pnpm install  # Ensure dependencies are installed
-pnpm run dev:local
-# Frontend starts on http://localhost:5173
-```
-
-**How it works:**
-- The local signaling server uses an in-memory store (no Turso DB needed)
-- The frontend detects `VITE_LOCAL_MODE=true` and connects to `ws://localhost:3001` instead of the AWS WebSocket endpoint
-- Peer matching happens locally via WebSocket
-- Video streams connect directly P2P via WebRTC
-
-**Notes:**
-- Open two browser tabs/windows to `http://localhost:5173` to test a call between peers
-- The local server runs on port 3001, the frontend on port 5173
-
-### Pulumi
-Set db token in env variable TURSO_AUTH_TOKEN
-```
 pulumi stack select dev
-pulumi config set --secret infra:dbToken my-db-token
-pulumi config set infra:dbUrl my-db-url
+pulumi config set infra:dbUrl            "<turso-db-url>"      # e.g. libsql://<db>.turso.io
+pulumi config set --secret infra:dbToken "<turso-db-token>"
+pulumi config set infra:meteredAppDomain "<metered-app-domain>"
+pulumi config set --secret infra:meteredSecretKey "<metered-secret-key>"
 ```
-Replace `my-token-db` and `my-db-url`.
 
-(The configuration is written to the file `infra/Pulumi.dev.yaml`)
+### Test the WebSocket
+
+```bash
+wscat -c "$(jq -r .apiEndpoint infra/outputs.json)"
+```
+
+## Turso (database) commands
+
+```bash
+turso db show --url <db-name>        # DB URL → infra:dbUrl
+turso db tokens create <db-name>     # auth token → infra:dbToken
+turso db tokens invalidate           # rotate tokens
+```
