@@ -1,0 +1,27 @@
+{
+  /*
+   * Type-checks the Playwright suite and its config. Kept separate from
+   * tsconfig.json (which covers `src`) for two reasons:
+   * - the tests run in Node, so they need `@types/node` (`process.env`), which
+   *   must NOT leak into the browser bundle's compilation;
+   * - the DOM lib is still required, because code inside `page.evaluate()`
+   *   touches RTCPeerConnection, MediaStream and window.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}
