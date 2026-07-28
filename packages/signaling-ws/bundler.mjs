@@ -12,7 +12,8 @@ const entryPoints = [
   './src/ws-new-ice-candidate/index.ts',
   './src/ws-video-answer/index.ts',
   './src/ws-video-offer/index.ts',
-  './src/ws-start/index.ts'
+  './src/ws-start/index.ts',
+  './src/ws-request-turn-credentials/index.ts'
 ];
 
 // Wipe dist so Pulumi never zips stale artifacts from a previous layout

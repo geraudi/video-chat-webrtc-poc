@@ -14,6 +14,7 @@ import {
   handleGetUserMediaError,
   handleIncomingMessage,
   hangUpCall,
+  resetCredentialCache,
   setOnCloseVideoCallback,
   setOnTrackCallBack,
   setSignaler,
@@ -59,8 +60,9 @@ export function useVideoChat() {
     }
   );
 
-  // Callback when a peer's video track is received
-  const onTrack = (event: RTCTrackEvent) => {
+  // Callback when a peer's video track is received. Memoized so the readyState
+  // effect below doesn't re-run (and wipe the credential cache) on every render.
+  const onTrack = useCallback((event: RTCTrackEvent) => {
     event.track.onunmute = () => {
       if (strangerCam.current?.srcObject) {
         return;
@@ -77,7 +79,7 @@ export function useVideoChat() {
       // Chat connected → transition to connected stage
       setStage('connected');
     }
-  };
+  }, []);
 
   // Callback when video call ends (peer disconnected or hangup)
   const onCloseVideo = useCallback((reason?: 'replacing' | 'stopping') => {
@@ -121,19 +123,32 @@ export function useVideoChat() {
     hangUpCall('stopping');
   }, []);
 
+  // Tracks the previous readyState so the credential cache is invalidated only
+  // on a genuine reconnect (non-OPEN → OPEN), not on every effect re-run.
+  const prevReady = useRef(readyState);
+
   // Initialize websocket connection
   useEffect(() => {
     switch (readyState) {
-      case ReadyState.OPEN:
+      case ReadyState.OPEN: {
         setSignaler({ send: sendMessage });
         setOnTrackCallBack(onTrack);
         setOnCloseVideoCallback(onCloseVideo);
+        // A (re)connection gets a fresh connectionId, so drop any cached
+        // credential that may have expired while the socket was down. Guard on
+        // a real transition so spurious effect re-runs don't wipe a valid cache.
+        const justOpened = prevReady.current !== ReadyState.OPEN;
+        if (justOpened) {
+          resetCredentialCache();
+        }
         setIsWebSocketConnected(true);
         break;
+      }
       case ReadyState.CLOSED:
         setIsWebSocketConnected(false);
         break;
     }
+    prevReady.current = readyState;
   }, [onCloseVideo, readyState, sendMessage, onTrack]);
 
   // Initialize webcam

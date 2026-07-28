@@ -1,10 +1,10 @@
-import { Button } from "./ui/button";
+import { Button } from './ui/button';
 
 export interface VideoChatProps {
   localCam: React.RefObject<HTMLVideoElement | null>;
   strangerCam: React.RefObject<HTMLVideoElement | null>;
   isWebSocketConnected: boolean;
-  stage: "idle" | "searching" | "connected";
+  stage: 'idle' | 'searching' | 'connected';
   userId?: string | null;
   strangerId?: string | null;
   onStart: () => void;
@@ -18,9 +18,9 @@ export interface VideoChatProps {
  */
 type ButtonConfig = {
   label: string;
-  action: "start" | "next" | "stop";
+  action: 'start' | 'next' | 'stop';
   disabled: boolean;
-};  
+};
 
 export function VideoChat({
   localCam,
@@ -36,22 +36,22 @@ export function VideoChat({
   // Derive button config from stage (single source of truth)
   const getButtonConfig = (): ButtonConfig | null => {
     switch (stage) {
-      case "idle":
+      case 'idle':
         return {
-          label: "Start",
-          action: "start",
+          label: 'Start',
+          action: 'start',
           disabled: !isWebSocketConnected
         };
-      case "searching":
+      case 'searching':
         return {
-          label: "Looking...",
-          action: "next",
+          label: 'Looking...',
+          action: 'next',
           disabled: true
         };
-      case "connected":
+      case 'connected':
         return {
-          label: "Next",
-          action: "next",
+          label: 'Next',
+          action: 'next',
           disabled: false
         };
     }
@@ -60,14 +60,20 @@ export function VideoChat({
   const buttonConfig = getButtonConfig();
 
   // Status messages for each stage
-  const getStatusMessage = (): { text: string; type: "disconnected" | "searching" | "connected" } | null => {
+  const getStatusMessage = (): {
+    text: string;
+    type: 'disconnected' | 'searching' | 'connected';
+  } | null => {
     switch (stage) {
-      case "idle":
-        return { text: isWebSocketConnected ? "Ready" : "Disconnected", type: isWebSocketConnected ? "connected" : "disconnected" };
-      case "searching":
-        return { text: "Looking for peer...", type: "searching" };
-      case "connected":
-        return { text: "Connected to stranger", type: "connected" };
+      case 'idle':
+        return {
+          text: isWebSocketConnected ? 'Ready' : 'Disconnected',
+          type: isWebSocketConnected ? 'connected' : 'disconnected'
+        };
+      case 'searching':
+        return { text: 'Looking for peer...', type: 'searching' };
+      case 'connected':
+        return { text: 'Connected to stranger', type: 'connected' };
     }
   };
 
@@ -75,21 +81,21 @@ export function VideoChat({
 
   // Render the button based on config
   const renderButton = (config: ButtonConfig) => {
-      return (
-        <Button
-          data-testid="action-button"
-          onClick={config.action === "start" ? onStart : onNext}
-          disabled={config.disabled}
-        >
-          {config.label}
-        </Button>
-      );
+    return (
+      <Button
+        data-testid="action-button"
+        onClick={config.action === 'start' ? onStart : onNext}
+        disabled={config.disabled}
+      >
+        {config.label}
+      </Button>
+    );
   };
 
   // Render control buttons based on stage
   const renderControls = () => {
     // Idle phase: only Start button
-    if (stage === "idle") {
+    if (stage === 'idle') {
       return buttonConfig ? renderButton(buttonConfig) : null;
     }
 
@@ -99,9 +105,7 @@ export function VideoChat({
     return (
       <div className="flex gap-4">
         {renderButton(buttonConfig)}
-        <Button onClick={onStop}>
-          Stop
-        </Button>
+        <Button onClick={onStop}>Stop</Button>
       </div>
     );
   };
@@ -145,11 +149,16 @@ export function VideoChat({
       <div className="mt-4 flex items-center gap-2">
         <div
           className={`w-3 h-3 rounded-full ${
-            statusMessage?.type === "connected" ? 'bg-green-500' : statusMessage?.type === "disconnected" ? 'bg-red-500' : 'bg-blue-500'
+            statusMessage?.type === 'connected'
+              ? 'bg-green-500'
+              : statusMessage?.type === 'disconnected'
+                ? 'bg-red-500'
+                : 'bg-blue-500'
           }`}
         />
         <span className="text-sm">
-          {statusMessage?.text ?? (isWebSocketConnected ? 'Connected' : 'Disconnected')}
+          {statusMessage?.text ??
+            (isWebSocketConnected ? 'Connected' : 'Disconnected')}
         </span>
       </div>
 

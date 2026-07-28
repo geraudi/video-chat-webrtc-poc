@@ -1,9 +1,11 @@
 import {
   Actions,
   type HangUpMessage,
+  type IceServer,
   type Message,
   type NewIceCandidateMessage,
   type ReceivedMessage,
+  type RequestTurnCredentialsMessage,
   type StartMessage,
   type VideoAnswerInputMessage,
   type VideoAnswerOutputMessage,
@@ -48,6 +50,26 @@ let hasRemoteDescription = false;
 let pendingCallerMatch: boolean = false;
 let pendingVideoOffer: VideoOfferInputMessage | null = null;
 
+// --- TURN credential manager ------------------------------------------------
+// Credentials are issued by the backend (expiring, 4h) over the existing
+// WebSocket and cached here for their lifetime. `getIceServers()` is the only
+// entry point: it returns the cache on a hit, otherwise sends
+// REQUEST_TURN_CREDENTIALS and awaits the inbound TURN_CREDENTIALS reply.
+let cachedIceServers: IceServer[] | null = null;
+let cachedExpiresAt = 0;
+let credentialPromise: Promise<IceServer[]> | null = null;
+let credentialResolver: ((servers: IceServer[]) => void) | null = null;
+let credentialRejecter: ((error: Error) => void) | null = null;
+let credentialTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Treat a credential as stale this far before its real expiry, to absorb
+// clock skew between the browser and Metered's server-side expiry check.
+const CREDENTIAL_SAFETY_MARGIN_MS = 60_000;
+// Fail fast to the STUN fallback if the backend doesn't answer in time.
+// Kept well under the Lambda's 8s timeout.
+const CREDENTIAL_REQUEST_TIMEOUT_MS = 8_000;
+const STUN_FALLBACK: IceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+
 export function setWebcamStream(stream: MediaStream) {
   webcamStream = stream;
 
@@ -84,17 +106,101 @@ export function setOnCloseVideoCallback(
   onCloseVideoCallback = callback;
 }
 
+/**
+ * Resolve (or reject) the pending credential request, if any, and clear the
+ * one-shot resolver state. Called from handleIncomingMessage when a
+ * TURN_CREDENTIALS message arrives.
+ */
+function resolveCredentialRequest(servers: IceServer[]): void {
+  if (credentialTimer) {
+    clearTimeout(credentialTimer);
+    credentialTimer = null;
+  }
+  credentialResolver?.(servers);
+  credentialResolver = null;
+  credentialRejecter = null;
+}
+
+/**
+ * Await the inbound TURN_CREDENTIALS reply. Rejects after
+ * CREDENTIAL_REQUEST_TIMEOUT_MS so the caller can fall back to STUN-only.
+ */
+function ensureCredentialArrived(): Promise<IceServer[]> {
+  return new Promise<IceServer[]>((resolve, reject) => {
+    credentialResolver = resolve;
+    credentialRejecter = reject;
+    credentialTimer = setTimeout(() => {
+      const rejecter = credentialRejecter;
+      credentialResolver = null;
+      credentialRejecter = null;
+      credentialTimer = null;
+      rejecter?.(new Error('TURN credential request timed out'));
+    }, CREDENTIAL_REQUEST_TIMEOUT_MS);
+  });
+}
+
+/**
+ * Returns the ICE servers to feed RTCPeerConnection. Serves from cache when
+ * the credential is still valid; otherwise requests fresh expiring credentials
+ * from the backend over the WebSocket. On any failure, falls back to a
+ * STUN-only config so a call can still proceed (strict improvement over the
+ * previous direct Metered fetch, which threw and aborted call setup).
+ *
+ * In-flight requests are de-duplicated via `credentialPromise`.
+ */
+async function getIceServers(): Promise<IceServer[]> {
+  if (
+    cachedIceServers &&
+    Date.now() < cachedExpiresAt - CREDENTIAL_SAFETY_MARGIN_MS
+  ) {
+    return cachedIceServers;
+  }
+
+  if (credentialPromise) {
+    return credentialPromise;
+  }
+
+  const message: RequestTurnCredentialsMessage = {
+    action: Actions.REQUEST_TURN_CREDENTIALS
+  };
+
+  credentialPromise = (async () => {
+    sendToServer(message);
+    return await ensureCredentialArrived();
+  })().finally(() => {
+    credentialPromise = null;
+  });
+
+  try {
+    return await credentialPromise;
+  } catch (error) {
+    console.warn(
+      'TURN credential request failed; falling back to STUN-only:',
+      error
+    );
+    return STUN_FALLBACK;
+  }
+}
+
+/**
+ * Invalidate the cached credential. Called on WebSocket reconnect: the new
+ * connection has a new connectionId and we cannot guarantee how long the
+ * socket was down, so the next call setup re-requests a fresh credential.
+ */
+export function resetCredentialCache(): void {
+  cachedIceServers = null;
+  cachedExpiresAt = 0;
+}
+
 async function createPeerConnection() {
-  const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+  // Fetch expiring TURN credentials from the backend (cached for their 4h
+  // lifetime); never reach for a hardcoded Metered key from the browser.
+  const iceServers = await getIceServers();
+
   // Using the iceServers array in the RTCPeerConnection method
   myPeerConnection = new RTCPeerConnection({
     iceServers: iceServers
   });
-
-  // myPeerConnection = new RTCPeerConnection({
-  //   // add your own TURN server here
-  //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  // });
 
   myPeerConnection.onicecandidate = handleICECandidateEvent;
   myPeerConnection.oniceconnectionstatechange =
@@ -134,6 +240,16 @@ export async function handleIncomingMessage(msg: ReceivedMessage) {
     case Actions.HANG_UP: // The other peer has hung up the call
       handleHangUpMsg();
       break;
+
+    case Actions.TURN_CREDENTIALS: {
+      // Always warm the cache, even if the resolver already timed out — a
+      // late-arriving reply benefits the next match. Resolving a no-longer
+      // pending request is a guarded no-op.
+      cachedIceServers = msg.iceServers;
+      cachedExpiresAt = msg.expiresAt;
+      resolveCredentialRequest(msg.iceServers);
+      break;
+    }
 
     default:
     // nothing to do.

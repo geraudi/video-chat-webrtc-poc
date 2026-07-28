@@ -1,4 +1,9 @@
-import { type Browser, type BrowserContext, type Page, expect } from '@playwright/test';
+import {
+  type Browser,
+  type BrowserContext,
+  expect,
+  type Page
+} from '@playwright/test';
 
 /**
  * E2E helpers for the WebRTC video chat.
@@ -21,7 +26,7 @@ export const selectors = {
   /** Secondary "Stop" button, visible only in searching/connected stages. */
   stopButton: 'button:has-text("Stop")',
   localVideo: '[data-testid="local-video"]',
-  strangerVideo: '[data-testid="stranger-video"]',
+  strangerVideo: '[data-testid="stranger-video"]'
 } as const;
 
 /**
@@ -37,12 +42,12 @@ export const selectors = {
  * Must be called BEFORE page.goto() so the route is registered first.
  */
 export async function isolateTurnCredentials(page: Page): Promise<void> {
-  await page.route('**/metered.live/**', (route) =>
+  await page.route('**/metered.live/**', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([{ urls: 'stun:stun.l.google.com:19302' }]),
-    }),
+      body: JSON.stringify([{ urls: 'stun:stun.l.google.com:19302' }])
+    })
   );
 }
 
@@ -62,7 +67,10 @@ export async function waitForReady(page: Page, timeout = 15000): Promise<void> {
  * Wait until a page transitions into the "searching" stage: the primary
  * button reads "Looking..." and is disabled, and a "Stop" button appears.
  */
-export async function waitForSearching(page: Page, timeout = 10000): Promise<void> {
+export async function waitForSearching(
+  page: Page,
+  timeout = 10000
+): Promise<void> {
   const actionButton = page.locator(selectors.actionButton);
   await expect(actionButton).toHaveText('Looking...', { timeout });
   await expect(actionButton).toBeDisabled({ timeout });
@@ -74,7 +82,10 @@ export async function waitForSearching(page: Page, timeout = 10000): Promise<voi
  * button reads "Next" and is enabled, and the stranger video has a stream
  * attached (srcObject set by the ontrack handler).
  */
-export async function waitForConnected(page: Page, timeout = 30000): Promise<void> {
+export async function waitForConnected(
+  page: Page,
+  timeout = 30000
+): Promise<void> {
   const actionButton = page.locator(selectors.actionButton);
   await expect(actionButton).toHaveText('Next', { timeout });
   await expect(actionButton).toBeEnabled({ timeout });
@@ -83,10 +94,10 @@ export async function waitForConnected(page: Page, timeout = 30000): Promise<voi
   await expect
     .poll(
       async () =>
-        page.locator(selectors.strangerVideo).evaluate(
-          (el) => (el as HTMLVideoElement).srcObject != null,
-        ),
-      { timeout },
+        page
+          .locator(selectors.strangerVideo)
+          .evaluate(el => (el as HTMLVideoElement).srcObject != null),
+      { timeout }
     )
     .toBe(true);
 }
@@ -122,7 +133,7 @@ export async function getServerHealth(): Promise<ServerHealth> {
  */
 async function waitForServerAvailable(
   minAvailable: number,
-  timeout = 5000,
+  timeout = 5000
 ): Promise<void> {
   await expect
     .poll(
@@ -131,7 +142,7 @@ async function waitForServerAvailable(
         console.log('[DEBUG waitForServerAvailable]', JSON.stringify(data));
         return data.available;
       },
-      { timeout, intervals: [200, 500, 1000] },
+      { timeout, intervals: [200, 500, 1000] }
     )
     .toBeGreaterThanOrEqual(minAvailable);
 }
@@ -147,7 +158,10 @@ async function waitForServerAvailable(
  * (before the START message reaches the server), causing two near-simultaneous
  * START messages to both see no available peer and both wait forever.
  */
-export async function clickStartOnBoth(page1: Page, page2: Page): Promise<void> {
+export async function clickStartOnBoth(
+  page1: Page,
+  page2: Page
+): Promise<void> {
   await page1.locator(selectors.actionButton).click();
   await waitForSearching(page1);
   // Wait until the server has ACTUALLY registered page1 as available before
@@ -159,14 +173,17 @@ export async function clickStartOnBoth(page1: Page, page2: Page): Promise<void> 
 /**
  * Verify the local webcam video has a real MediaStream attached.
  */
-export async function expectLocalVideoReady(page: Page, timeout = 10000): Promise<void> {
+export async function expectLocalVideoReady(
+  page: Page,
+  timeout = 10000
+): Promise<void> {
   await expect
     .poll(
       async () =>
-        page.locator(selectors.localVideo).evaluate(
-          (el) => (el as HTMLVideoElement).srcObject != null,
-        ),
-      { timeout },
+        page
+          .locator(selectors.localVideo)
+          .evaluate(el => (el as HTMLVideoElement).srcObject != null),
+      { timeout }
     )
     .toBe(true);
 }
@@ -179,10 +196,10 @@ export async function expectLocalVideoReady(page: Page, timeout = 10000): Promis
  * without any physical hardware. No WebRTC mocking is performed.
  */
 export async function createPeerPages(
-  browser: Browser,
+  browser: Browser
 ): Promise<{ context: BrowserContext; page1: Page; page2: Page }> {
   const context = await browser.newContext({
-    permissions: ['camera', 'microphone'],
+    permissions: ['camera', 'microphone']
   });
   const page1 = await context.newPage();
   const page2 = await context.newPage();
@@ -197,7 +214,10 @@ export async function openAppOnBoth(page1: Page, page2: Page): Promise<void> {
   await Promise.all([page1.goto('/'), page2.goto('/')]);
   await Promise.all([waitForReady(page1), waitForReady(page2)]);
   // Both local webcams should be initialized by now.
-  await Promise.all([expectLocalVideoReady(page1), expectLocalVideoReady(page2)]);
+  await Promise.all([
+    expectLocalVideoReady(page1),
+    expectLocalVideoReady(page2)
+  ]);
 }
 
 /**
@@ -218,13 +238,16 @@ export async function waitForServerIdle(timeout = 5000): Promise<void> {
       async () => {
         try {
           const res = await fetch('http://localhost:3001/health');
-          const data = (await res.json()) as { peers: number; available: number };
+          const data = (await res.json()) as {
+            peers: number;
+            available: number;
+          };
           return data.peers + data.available;
         } catch {
           return -1;
         }
       },
-      { timeout },
+      { timeout }
     )
     .toBe(0);
 }

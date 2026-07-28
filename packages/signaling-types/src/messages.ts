@@ -5,7 +5,20 @@ export enum Actions {
   NEW_ICE_CANDIDATE = 'newIceCandidate',
   HANG_UP = 'hangUp',
   START = 'start',
-  INI_OFFER = 'initOffer'
+  INI_OFFER = 'initOffer',
+  REQUEST_TURN_CREDENTIALS = 'requestTurnCredentials',
+  TURN_CREDENTIALS = 'turnCredentials'
+}
+
+/**
+ * Minimal ICE server shape (subset of RTCIceServer). Declared here rather than
+ * importing the DOM RTCIceServer type so the backend — a Node package — does
+ * not depend on the DOM lib.
+ */
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
 }
 
 export interface Message {
@@ -57,9 +70,20 @@ export interface HangUpMessage {
   strangerId: string;
 }
 
+export interface RequestTurnCredentialsMessage extends Message {
+  action: Actions.REQUEST_TURN_CREDENTIALS;
+}
+
+export interface TurnCredentialsMessage extends Message {
+  action: Actions.TURN_CREDENTIALS;
+  iceServers: IceServer[];
+  expiresAt: number;
+}
+
 export type ReceivedMessage =
   | InitOfferMessage
   | VideoOfferInputMessage
   | VideoAnswerInputMessage
   | NewIceCandidateMessage
-  | HangUpMessage;
+  | HangUpMessage
+  | TurnCredentialsMessage;

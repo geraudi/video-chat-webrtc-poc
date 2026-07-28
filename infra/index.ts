@@ -7,6 +7,7 @@ import { writeOutputsFile } from './src/helpers';
 import { getNewIceCandidateLambda } from './src/new-ice-candidate-lambda';
 import { getStage } from './src/stage-api';
 import { getStartLambda } from './src/start-lambda';
+import { getTurnCredentialsLambda } from './src/turn-credentials-lambda';
 import { getVideoAnswerLambda } from './src/video-answer';
 import { getVideoOfferLambda } from './src/video-offer-lambda';
 
@@ -14,6 +15,8 @@ const config = new pulumi.Config();
 
 const dbUrl = config.require('dbUrl');
 const dbToken = config.requireSecret('dbToken');
+const meteredAppDomain = config.require('meteredAppDomain');
+const meteredSecretKey = config.requireSecret('meteredSecretKey');
 
 const api = getApi();
 const stage = getStage(api);
@@ -25,6 +28,7 @@ getVideoOfferLambda(api, stage, dbUrl, dbToken);
 getVideoAnswerLambda(api, stage);
 getNewIceCandidateLambda(api, stage);
 getHangUpLambda(api, stage);
+getTurnCredentialsLambda(api, stage, meteredAppDomain, meteredSecretKey);
 
 writeOutputsFile(api, stage);
 

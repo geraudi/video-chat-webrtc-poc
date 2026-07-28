@@ -10,7 +10,7 @@ import {
   waitForConnected,
   waitForReady,
   waitForSearching,
-  waitForServerIdle,
+  waitForServerIdle
 } from './helpers';
 
 /**
@@ -34,13 +34,16 @@ test.afterEach(async () => {
 
 test.describe('Video Chat — full peer-to-peer flow', () => {
   test('two users are matched and reach a connected video call through the real signaling server', async ({
-    browser,
+    browser
   }) => {
     const { context, page1, page2 } = await createPeerPages(browser);
     try {
       // Isolate the third-party TURN credential service. WebRTC itself runs
       // against the real browser stack — only this fetch is stubbed.
-      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await Promise.all([
+        isolateTurnCredentials(page1),
+        isolateTurnCredentials(page2)
+      ]);
       await openAppOnBoth(page1, page2);
 
       // Trigger matching on both sides via the real server.
@@ -57,25 +60,29 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
       await expectLocalVideoReady(page2);
 
       // The status indicator should reflect an active call.
-      await expect(page1.locator('span:has-text("Connected to stranger")')).toBeVisible();
-      await expect(page2.locator('span:has-text("Connected to stranger")')).toBeVisible();
+      await expect(
+        page1.locator('span:has-text("Connected to stranger")')
+      ).toBeVisible();
+      await expect(
+        page2.locator('span:has-text("Connected to stranger")')
+      ).toBeVisible();
     } finally {
       await context.close();
     }
   });
 
   test('Start button is disabled before the WebSocket connects, then becomes enabled', async ({
-    browser,
+    browser
   }) => {
     const context = await browser.newContext({
-      permissions: ['camera', 'microphone'],
+      permissions: ['camera', 'microphone']
     });
     const page = await context.newPage();
     try {
       // Block the WebSocket so it never connects, simulating a slow/unavailable
       // signaling server. This is an error-scenario test — the only allowed
       // use of transport interception. No WebRTC APIs are mocked.
-      await page.routeWebSocket('ws://localhost:3001/**', (ws) => {
+      await page.routeWebSocket('ws://localhost:3001/**', ws => {
         // Never call ws.connectToServer(): the client connection stays
         // blocked/closed, so readyState never reaches OPEN.
         ws.close();
@@ -96,10 +103,10 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
   });
 
   test('clicking Start transitions the UI to the "Looking..." searching stage', async ({
-    browser,
+    browser
   }) => {
     const context = await browser.newContext({
-      permissions: ['camera', 'microphone'],
+      permissions: ['camera', 'microphone']
     });
     const page = await context.newPage();
     try {
@@ -114,17 +121,19 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
       await waitForSearching(page);
 
       // The status indicator should reflect the searching state.
-      await expect(page.locator('span:has-text("Looking for peer...")')).toBeVisible();
+      await expect(
+        page.locator('span:has-text("Looking for peer...")')
+      ).toBeVisible();
     } finally {
       await context.close();
     }
   });
 
   test('Stop returns a searching user to the idle stage with the Start button', async ({
-    browser,
+    browser
   }) => {
     const context = await browser.newContext({
-      permissions: ['camera', 'microphone'],
+      permissions: ['camera', 'microphone']
     });
     const page = await context.newPage();
     try {
@@ -140,7 +149,7 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
       await expect
         .poll(async () => (await getServerHealth()).available, {
           timeout: 5000,
-          intervals: [200, 500, 1000],
+          intervals: [200, 500, 1000]
         })
         .toBeGreaterThanOrEqual(1);
 
@@ -158,7 +167,9 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
       // and must NOT climb back above its pre-Stop level.
       await page.waitForTimeout(500);
       const healthAfterStop = await getServerHealth();
-      expect(healthAfterStop.available).toBeLessThanOrEqual(availableBeforeStop);
+      expect(healthAfterStop.available).toBeLessThanOrEqual(
+        availableBeforeStop
+      );
       expect(healthAfterStop.available).toBeLessThan(availableBeforeStop);
     } finally {
       await context.close();
@@ -168,11 +179,14 @@ test.describe('Video Chat — full peer-to-peer flow', () => {
 
 test.describe('Video Chat — Next (re-match) flow', () => {
   test('clicking Next during a call tears down and re-establishes a new connection', async ({
-    browser,
+    browser
   }) => {
     const { context, page1, page2 } = await createPeerPages(browser);
     try {
-      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await Promise.all([
+        isolateTurnCredentials(page1),
+        isolateTurnCredentials(page2)
+      ]);
       await openAppOnBoth(page1, page2);
       await clickStartOnBoth(page1, page2);
       await waitForConnected(page1);
@@ -198,11 +212,14 @@ test.describe('Video Chat — Next (re-match) flow', () => {
   });
 
   test('clicking Stop during a connected call returns the clicking peer to idle', async ({
-    browser,
+    browser
   }) => {
     const { context, page1, page2 } = await createPeerPages(browser);
     try {
-      await Promise.all([isolateTurnCredentials(page1), isolateTurnCredentials(page2)]);
+      await Promise.all([
+        isolateTurnCredentials(page1),
+        isolateTurnCredentials(page2)
+      ]);
       await openAppOnBoth(page1, page2);
       await clickStartOnBoth(page1, page2);
       await waitForConnected(page1);
@@ -229,9 +246,12 @@ test.describe('Video Chat — Next (re-match) flow', () => {
       // The remote peer (page1) receives the hangUp. With only 2 peers its
       // terminal state is non-deterministic (it may auto-re-search or idle),
       // so we assert only that page1 left the connected stage.
-      await expect(page1.locator(selectors.actionButton)).not.toHaveText('Next', {
-        timeout: 5000,
-      });
+      await expect(page1.locator(selectors.actionButton)).not.toHaveText(
+        'Next',
+        {
+          timeout: 5000
+        }
+      );
     } finally {
       await context.close();
     }

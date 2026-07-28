@@ -1,10 +1,12 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { AwsApiGatewaySignalingGateway } from '../adapters/gateways/aws-api-gateway-signaling-gateway.js';
+import { MeteredTurnCredentialGateway } from '../adapters/gateways/metered-turn-credential-gateway.js';
 import { TursoConnectionRepository } from '../adapters/repositories/turso-connection-repository.js';
 import { ConnectPeer } from '../usecases/connect-peer.js';
 import { DisconnectPeer } from '../usecases/disconnect-peer.js';
 import { FindStranger } from '../usecases/find-stranger.js';
 import { ForwardMessage } from '../usecases/forward-message.js';
+import { RequestTurnCredentials } from '../usecases/request-turn-credentials.js';
 
 /**
  * Production composition root.
@@ -47,6 +49,24 @@ function getGateway(
   return new AwsApiGatewaySignalingGateway(domainName, stage);
 }
 
+/**
+ * Builds the production TURN credential gateway. Only the ws-turn-credentials
+ * Lambda reaches this getter, so METERED_* is only required there — the other
+ * Lambdas never import the Metered adapter and never fail on missing env.
+ */
+function getTurnGateway(): MeteredTurnCredentialGateway {
+  const appDomain = process.env.METERED_APP_DOMAIN;
+  const secretKey = process.env.METERED_SECRET_KEY;
+
+  if (!appDomain || !secretKey) {
+    throw new Error(
+      'METERED_APP_DOMAIN and METERED_SECRET_KEY environment variables are required'
+    );
+  }
+
+  return new MeteredTurnCredentialGateway(appDomain, secretKey);
+}
+
 export function getUseCases(event: APIGatewayProxyEvent) {
   return {
     get findStranger() {
@@ -60,6 +80,9 @@ export function getUseCases(event: APIGatewayProxyEvent) {
     },
     get disconnectPeer() {
       return new DisconnectPeer(getRepo());
+    },
+    get requestTurnCredentials() {
+      return new RequestTurnCredentials(getTurnGateway(), getGateway(event));
     }
   };
 }

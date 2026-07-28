@@ -1,12 +1,14 @@
-import { Actions, type Message } from '@repo/signaling-types/messages';
 import http from 'node:http';
+import { Actions, type Message } from '@repo/signaling-types/messages';
 import { WebSocket, WebSocketServer } from 'ws';
+import { LocalTurnCredentialGateway } from '../adapters/gateways/local-turn-credential-gateway.js';
 import { LocalWebSocketGateway } from '../adapters/gateways/local-websocket-gateway.js';
 import { InMemoryConnectionRepository } from '../adapters/repositories/in-memory-connection-repository.js';
 import { ConnectPeer } from '../usecases/connect-peer.js';
 import { DisconnectPeer } from '../usecases/disconnect-peer.js';
 import { FindStranger } from '../usecases/find-stranger.js';
 import { ForwardMessage } from '../usecases/forward-message.js';
+import { RequestTurnCredentials } from '../usecases/request-turn-credentials.js';
 
 /**
  * Local WebSocket server using Ports & Adapters architecture.
@@ -21,6 +23,7 @@ class LocalSignalingServer {
   private forwardMessage: ForwardMessage;
   private connectPeer: ConnectPeer;
   private disconnectPeer: DisconnectPeer;
+  private requestTurnCredentials: RequestTurnCredentials;
   private wss: WebSocketServer;
 
   // Serializes START message handling to prevent a race condition in
@@ -40,6 +43,10 @@ class LocalSignalingServer {
     this.forwardMessage = new ForwardMessage(gateway);
     this.connectPeer = new ConnectPeer(repo);
     this.disconnectPeer = new DisconnectPeer(repo);
+    this.requestTurnCredentials = new RequestTurnCredentials(
+      new LocalTurnCredentialGateway(),
+      gateway
+    );
 
     // Shared HTTP server so we can expose a small health/debug endpoint
     // alongside the WebSocket server. Tests poll GET /health to wait until
@@ -51,8 +58,8 @@ class LocalSignalingServer {
         res.end(
           JSON.stringify({
             peers: this.peers.size,
-            available: repo.countAvailable(),
-          }),
+            available: repo.countAvailable()
+          })
         );
         return;
       }
@@ -135,14 +142,14 @@ class LocalSignalingServer {
         // finish before reading repository state.
         console.log(`[Server] START lock acquired for ${connectionId}`);
         const run = this.startLock.then(() =>
-          this.findStranger.execute(connectionId),
+          this.findStranger.execute(connectionId)
         );
         // Swallow errors on the lock chain so a rejected handler doesn't
         // poison all subsequent STARTs; the caller (handleMessage) handles
         // the actual error for this invocation.
         this.startLock = run.then(
           () => undefined,
-          () => undefined,
+          () => undefined
         );
         await run;
         break;
@@ -156,6 +163,11 @@ class LocalSignalingServer {
         if (strangerId) {
           await this.forwardMessage.execute(connectionId, strangerId, message);
         }
+        break;
+      }
+
+      case Actions.REQUEST_TURN_CREDENTIALS: {
+        await this.requestTurnCredentials.execute(connectionId);
         break;
       }
 

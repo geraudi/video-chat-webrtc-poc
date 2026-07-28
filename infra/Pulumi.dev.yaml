@@ -3,3 +3,6 @@ config:
   infra:dbToken:
     secure: AAABAGdNTdlaicdqlfOrviGAAAxEl/SkfyrbnCdmlSESIVx2XQAVe+DFVkk4HtLJAMJU39hYEhdG8J/BvPyu5b4wg1UK1exDQIPMF44OTQuISIBnxdOnjwcE7baEtTGgrcMXA7IhiznC/3xwHJwNLAkIb26HNq7BhgXo7U82HxmgwY1+ZObFuanXW9XZvWLKUrCA4j7AZjO5+MNgZp6aLLho2y3+8jSUlIehGkNbUsYnFK4vy6eZjZbJ5/kM6GOcZ+hScIC9oEOoHT/blrzPMLkV7wU/qGG+ZUkAbfQqJV4Gf9lamsNg9xuHjeuXC9vkU5M8ltY1kjf8gKY=
   infra:dbUrl: "libsql://my-turborepo-geraudi.turso.io"
+  infra:meteredSecretKey:
+    secure: AAABALnJrbSedvIDFU0Fznt2TJrQs2cvaMPqP9+JLpm9UshrEidHOJDga5uWa2MpWFlqM+tM3zVFJXNoqdpaX2BsUJALAPqTwSlpIG/6Gzg=
+  infra:meteredAppDomain: wahwah.metered.live

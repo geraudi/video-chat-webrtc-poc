@@ -33,7 +33,7 @@ export default defineConfig({
     video: 'retain-on-failure',
     // Grant camera/microphone permissions so getUserMedia succeeds without
     // any permission dialog (deterministic headless/CI runs).
-    permissions: ['camera', 'microphone'],
+    permissions: ['camera', 'microphone']
   },
 
   projects: [
@@ -53,11 +53,11 @@ export default defineConfig({
             // Use Chromium's built-in fake video/audio capture device so
             // getUserMedia succeeds without physical hardware. This is a
             // boolean flag (NOT a key=value flag).
-            '--use-fake-device-for-media-stream',
-          ],
-        },
-      },
-    },
+            '--use-fake-device-for-media-stream'
+          ]
+        }
+      }
+    }
   ],
 
   webServer: [
@@ -69,7 +69,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
-      timeout: 60_000,
+      timeout: 60_000
     },
     {
       // Frontend Vite dev server.
@@ -78,7 +78,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
-      timeout: 60_000,
-    },
-  ],
+      timeout: 60_000
+    }
+  ]
 });

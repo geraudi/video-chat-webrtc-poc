@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: 'Geist Variable', sans-serif;
-  
+  --font-sans: "Geist Variable", sans-serif;
+
   /* shadcn/ui color tokens mapped for Tailwind v4 */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -27,7 +27,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  
+
   /* Border radius tokens for rounded-* classes */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
