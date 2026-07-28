@@ -1,4 +1,6 @@
-import { Button } from './ui/button';
+import { ChatPanel } from './chat-panel';
+import { ControlBar } from './control-bar';
+import { VideoTile } from './video-tile';
 
 export interface VideoChatProps {
   localCam: React.RefObject<HTMLVideoElement | null>;
@@ -12,15 +14,9 @@ export interface VideoChatProps {
   onStop: () => void;
 }
 
-/**
- * Button configuration for the current stage.
- * Derived from stage to avoid duplicating logic in the component.
- */
-type ButtonConfig = {
-  label: string;
-  action: 'start' | 'next' | 'stop';
-  disabled: boolean;
-};
+type Stage = VideoChatProps['stage'];
+
+type StatusType = 'disconnected' | 'searching' | 'connected';
 
 export function VideoChat({
   localCam,
@@ -33,152 +29,81 @@ export function VideoChat({
   onNext,
   onStop
 }: VideoChatProps) {
-  // Derive button config from stage (single source of truth)
-  const getButtonConfig = (): ButtonConfig | null => {
-    switch (stage) {
-      case 'idle':
-        return {
-          label: 'Start',
-          action: 'start',
-          disabled: !isWebSocketConnected
-        };
-      case 'searching':
-        return {
-          label: 'Looking...',
-          action: 'next',
-          disabled: true
-        };
-      case 'connected':
-        return {
-          label: 'Next',
-          action: 'next',
-          disabled: false
-        };
-    }
-  };
-
-  const buttonConfig = getButtonConfig();
-
-  // Status messages for each stage
-  const getStatusMessage = (): {
-    text: string;
-    type: 'disconnected' | 'searching' | 'connected';
-  } | null => {
-    switch (stage) {
-      case 'idle':
-        return {
-          text: isWebSocketConnected ? 'Ready' : 'Disconnected',
-          type: isWebSocketConnected ? 'connected' : 'disconnected'
-        };
-      case 'searching':
-        return { text: 'Looking for peer...', type: 'searching' };
-      case 'connected':
-        return { text: 'Connected to stranger', type: 'connected' };
-    }
-  };
-
-  const statusMessage = getStatusMessage();
-
-  // Render the button based on config
-  const renderButton = (config: ButtonConfig) => {
-    return (
-      <Button
-        data-testid="action-button"
-        onClick={config.action === 'start' ? onStart : onNext}
-        disabled={config.disabled}
-      >
-        {config.label}
-      </Button>
-    );
-  };
-
-  // Render control buttons based on stage
-  const renderControls = () => {
-    // Idle phase: only Start button
-    if (stage === 'idle') {
-      return buttonConfig ? renderButton(buttonConfig) : null;
-    }
-
-    // Searching or connected phases: Next/Looking + Stop buttons
-    if (!buttonConfig) return null;
-
-    return (
-      <div className="flex gap-4">
-        {renderButton(buttonConfig)}
-        <Button onClick={onStop}>Stop</Button>
-      </div>
-    );
-  };
+  const statusMessage = getStatusMessage(stage, isWebSocketConnected);
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center bg-gray-100 p-4">
-      <h1 className="mb-6 text-4xl font-bold">WebRTC POC</h1>
+    <div className="flex h-[calc(100vh-2rem)] w-full flex-col gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">WebRTC POC</h1>
+        <StatusIndicator text={statusMessage.text} type={statusMessage.type} />
+      </header>
 
-      {/* Video Grid */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {/* Local Video */}
-        <div className="flex flex-col items-center">
-          <video
-            ref={localCam}
-            autoPlay
-            muted
-            playsInline
-            data-testid="local-video"
-            className="rounded-lg shadow-lg w-[320px] h-[240px] object-cover bg-gray-900"
-          />
-          <p className="mt-2 text-sm font-medium">You</p>
-        </div>
-
-        {/* Remote Video */}
-        <div className="flex flex-col items-center">
-          <video
-            ref={strangerCam}
-            autoPlay
-            playsInline
-            data-testid="stranger-video"
-            className="rounded-lg shadow-lg w-[320px] h-[240px] object-cover bg-gray-900"
-          />
-          <p className="mt-2 text-sm font-medium">Stranger</p>
-        </div>
-      </div>
-
-      {/* Controls - single consolidated block */}
-      {renderControls()}
-
-      {/* Status Indicator */}
-      <div className="mt-4 flex items-center gap-2">
-        <div
-          className={`w-3 h-3 rounded-full ${
-            statusMessage?.type === 'connected'
-              ? 'bg-green-500'
-              : statusMessage?.type === 'disconnected'
-                ? 'bg-red-500'
-                : 'bg-blue-500'
-          }`}
+      <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[65fr_35fr]">
+        {/* Dominant: remote video */}
+        <VideoTile
+          videoRef={strangerCam}
+          label="Stranger camera"
+          className="min-h-[240px]"
         />
-        <span className="text-sm">
-          {statusMessage?.text ??
-            (isWebSocketConnected ? 'Connected' : 'Disconnected')}
-        </span>
+
+        {/* Sidebar: local camera, chat, controls */}
+        <div className="grid min-h-0 grid-rows-[45fr_40fr_auto] gap-5">
+          <VideoTile
+            videoRef={localCam}
+            label="My Camera"
+            muted
+            className="min-h-[180px]"
+          />
+          <ChatPanel />
+          <ControlBar
+            stage={stage}
+            isWebSocketConnected={isWebSocketConnected}
+            onStart={onStart}
+            onNext={onNext}
+            onStop={onStop}
+          />
+        </div>
       </div>
 
-      {/* Debugging Info */}
       {(userId || strangerId) && (
-        <div className="mt-4 text-xs text-gray-500 font-mono">
-          <div className="flex flex-col gap-1">
-            {userId && (
-              <span>
-                <strong>Your ID:</strong> {userId}
-              </span>
-            )}
-            {strangerId && (
-              <span>
-                <strong>Stranger ID:</strong> {strangerId}
-              </span>
-            )}
-          </div>
+        <div className="font-mono text-xs text-muted-foreground">
+          {userId && <div>Your ID: {userId}</div>}
+          {strangerId && <div>Stranger ID: {strangerId}</div>}
         </div>
       )}
     </div>
   );
+}
+
+function StatusIndicator({ text, type }: { text: string; type: StatusType }) {
+  const dotColor =
+    type === 'connected'
+      ? 'bg-green-500'
+      : type === 'disconnected'
+        ? 'bg-red-500'
+        : 'bg-blue-500';
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`size-3 rounded-full ${dotColor}`} />
+      <span className="text-sm">{text}</span>
+    </div>
+  );
+}
+
+function getStatusMessage(
+  stage: Stage,
+  isWebSocketConnected: boolean
+): { text: string; type: StatusType } {
+  switch (stage) {
+    case 'idle':
+      return {
+        text: isWebSocketConnected ? 'Ready' : 'Disconnected',
+        type: isWebSocketConnected ? 'connected' : 'disconnected'
+      };
+    case 'searching':
+      return { text: 'Looking for peer...', type: 'searching' };
+    case 'connected':
+      return { text: 'Connected to stranger', type: 'connected' };
+  }
 }
