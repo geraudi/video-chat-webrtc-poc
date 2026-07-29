@@ -17,8 +17,11 @@ export interface SignalingFrame {
 }
 
 export interface SignalingRecorder {
-  /** URL of the socket the app opened, or null if it never opened one. */
-  url(): string | null;
+  /**
+   * Every socket the page opened, signaling or not, in order. Lets a test state
+   * where the app connected — including when it connected nowhere useful.
+   */
+  observedUrls(): string[];
   /** Every JSON frame seen so far, in order. */
   frames(): SignalingFrame[];
   /** Actions observed in one direction, in order (duplicates kept). */
@@ -37,7 +40,7 @@ export function recordSignaling(
   signalingUrl: string
 ): SignalingRecorder {
   const frames: SignalingFrame[] = [];
-  let url: string | null = null;
+  const observedUrls: string[] = [];
 
   const record = (direction: FrameDirection, payload: string): void => {
     let action: unknown;
@@ -52,9 +55,9 @@ export function recordSignaling(
   };
 
   page.on('websocket', socket => {
+    observedUrls.push(socket.url());
     if (!socket.url().startsWith(signalingUrl)) return;
 
-    url ??= socket.url();
     socket.on('framesent', frame => record('sent', frame.payload.toString()));
     socket.on('framereceived', frame =>
       record('received', frame.payload.toString())
@@ -62,7 +65,7 @@ export function recordSignaling(
   });
 
   return {
-    url: () => url,
+    observedUrls: () => [...observedUrls],
     frames: () => [...frames],
     actions: direction =>
       frames

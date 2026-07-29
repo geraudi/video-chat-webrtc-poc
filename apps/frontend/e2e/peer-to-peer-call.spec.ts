@@ -42,8 +42,15 @@ test('two peers reach a connected WebRTC call through the real signaling server'
       // peer: the server's total connection count is shared state (a dev tab on
       // :5173, or peers still disconnecting from an earlier run, all count),
       // so no arithmetic on it can be reliable.
+      // Asserted against the list of every socket the page opened, which is
+      // never null: the failure then prints what the app actually connected to
+      // (a URL other than the local server means VITE_SIGNALING_URL leaked in
+      // from the environment) instead of an opaque
+      // "received value must not be null".
       for (const peer of [alice, bob]) {
-        expect(peer.signaling.url()).toContain(SIGNALING_WS_URL);
+        expect(peer.signaling.observedUrls().join(', ')).toContain(
+          SIGNALING_WS_URL
+        );
       }
     });
 
