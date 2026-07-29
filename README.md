@@ -129,3 +129,9 @@ turso db show --url <db-name>        # DB URL → infra:dbUrl
 turso db tokens create <db-name>     # auth token → infra:dbToken
 turso db tokens invalidate           # rotate tokens
 ```
+
+## TURN credentials (Metered)
+
+TURN credentials are short-lived (4h, Metered's minimum) and minted on demand by the `REQUEST_TURN_CREDENTIALS` Lambda. The frontend caches the returned `iceServers` until their `expiresAt` (minus a 60s safety margin), then re-requests. Reuse-first: the gateway lists existing valid credentials under a single shared label and reuses one before minting, so the live credential set stays at ~1 regardless of traffic. Expired credentials don't count against the account's create cap; minting with the existing label overwrites the previous one. No mid-call renewal is needed — 4h exceeds any single call.
+
+Configure via `infra:meteredAppDomain` and `infra:meteredSecretKey` (see [Pulumi configuration](#pulumi-configuration)).
