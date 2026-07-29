@@ -24,7 +24,7 @@ export interface SignalingServerHealth {
   available: number;
 }
 
-export async function readSignalingServerHealth(): Promise<SignalingServerHealth> {
+async function readSignalingServerHealth(): Promise<SignalingServerHealth> {
   const response = await fetch(HEALTH_URL);
   if (!response.ok) {
     throw new Error(`Signaling server /health returned ${response.status}`);
@@ -33,16 +33,19 @@ export async function readSignalingServerHealth(): Promise<SignalingServerHealth
 }
 
 /**
- * Wait until nobody is waiting in the matching pool, and return the server
- * state at that moment as a baseline.
+ * Wait until nobody is waiting in the matching pool.
  *
  * The signaling server is shared (`reuseExistingServer` in playwright.config),
  * so a leftover peer — another browser tab left on "Looking for peer...", or a
  * context from a previous run still closing — would be matched with the first
  * peer of this test and steal the call. Failing here, fast and explicitly,
  * beats a mystified timeout later on.
+ *
+ * Only `available` is checked: it is the sole count that can affect matching.
+ * The total connection count is shared state a test cannot own, so it is
+ * deliberately not asserted anywhere.
  */
-export async function waitForEmptyMatchingPool(): Promise<SignalingServerHealth> {
+export async function waitForEmptyMatchingPool(): Promise<void> {
   await expect
     .poll(async () => (await readSignalingServerHealth()).available, {
       message:
@@ -50,6 +53,4 @@ export async function waitForEmptyMatchingPool(): Promise<SignalingServerHealth>
       timeout: 10_000
     })
     .toBe(0);
-
-  return readSignalingServerHealth();
 }

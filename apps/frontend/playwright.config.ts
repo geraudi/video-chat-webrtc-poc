@@ -24,7 +24,8 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   reporter: process.env.CI ? [['github'], ['html']] : 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    // Dedicated port, not Vite's default 5173: see the webServer entry below.
+    baseURL: 'http://localhost:5273',
     // getUserMedia must succeed without a permission dialog.
     permissions: ['camera', 'microphone'],
     trace: 'on-first-retry',
@@ -60,9 +61,18 @@ export default defineConfig({
       timeout: 60_000
     },
     {
-      command: 'pnpm dev',
-      url: 'http://localhost:5173',
-      reuseExistingServer: !process.env.CI,
+      // The app under test must point at the local signaling server, so the
+      // suite owns its dev server instead of inheriting one:
+      // - `dev:local` forces VITE_LOCAL_MODE=true, overriding a machine's
+      //   .env.local / shell VITE_SIGNALING_URL (which would otherwise send the
+      //   peers to the deployed AWS signaling server);
+      // - a dedicated port with `reuseExistingServer: false` means a `pnpm dev`
+      //   already running on 5173 — configured however that developer likes —
+      //   is never reused. `--strictPort` turns a leftover process into an
+      //   explicit port error instead of a silent fallback to another port.
+      command: 'pnpm dev:local --port 5273 --strictPort',
+      url: 'http://localhost:5273',
+      reuseExistingServer: false,
       stdout: 'pipe',
       stderr: 'pipe',
       timeout: 60_000

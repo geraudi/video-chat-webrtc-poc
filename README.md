@@ -69,6 +69,28 @@ Open `http://localhost:5173` in **two tabs/windows** to test a call between peer
 | `VITE_LOCAL_MODE`  | `true` → connect to `ws://localhost:3001`. `false` → use AWS endpoint.     |
 | `VITE_SIGNALING_URL` | AWS API Gateway WebSocket URL (e.g. `wss://…/dev`). Ignored in local mode. |
 
+## End-to-end tests
+
+One Playwright test drives the real peer-to-peer flow: two browser contexts,
+the browser's own `RTCPeerConnection`, real SDP/ICE negotiation, real media
+(Chromium's fake capture device) and the real local signaling server. Nothing is
+mocked.
+
+```bash
+pnpm --filter @repo/frontend exec playwright install chromium   # once
+pnpm --filter @repo/frontend test                               # run the suite
+```
+
+The suite starts what it needs and does not touch your dev setup: the signaling
+server on `3001` (reused if already running) and its **own** Vite server on
+`5273` with `VITE_LOCAL_MODE=true`, so a `pnpm dev` on `5173` — and any
+`.env.local` pointing at AWS — is ignored.
+
+One shared piece of state can break a run: a browser tab left on
+"Looking for peer..." sits in the signaling server's matching pool and gets
+matched with one of the test's peers. The suite checks for this first and fails
+with an explicit message rather than timing out.
+
 ## Deploy to AWS
 
 Always deploy from the repo root via Turborepo — it builds the dependencies first (lints, then builds `signaling-types`, `signaling-ws` → `dist/`, and `frontend`) **before** running Pulumi. `signaling-ws#build` regenerates the per-Lambda bundles in `dist/` that Pulumi zips; skipping it deploys stale or missing artifacts.
