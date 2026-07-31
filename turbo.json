@@ -12,6 +12,7 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "test": {},
     "clean": {},
     "dev": {
       "persistent": true,
