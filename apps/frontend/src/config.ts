@@ -7,7 +7,7 @@ const config = {
   signalingServer: {
     REGION: isLocal ? 'local' : 'us-east-1',
     URL: isLocal
-      ? `ws://${window.location.hostname}:3001`
+      ? `ws://${window.location.hostname}:8787/ws`
       : import.meta.env.VITE_SIGNALING_URL || ''
   }
 };

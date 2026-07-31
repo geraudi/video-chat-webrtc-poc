@@ -13,7 +13,7 @@ import {
  * The product's core user journey, exercised end to end with nothing simulated:
  * two independent browser contexts, Chromium's real RTCPeerConnection, real SDP
  * offer/answer, real ICE negotiation, real media (fake capture device) and the
- * real local WebSocket signaling server started by playwright.config.ts.
+ * real Cloudflare WebSocket signaling worker started by playwright.config.ts.
  */
 test('two peers reach a connected WebRTC call through the real signaling server', async ({
   browser

@@ -4,8 +4,8 @@ import type { Page } from '@playwright/test';
  * Observes the signaling WebSocket a page opens, without touching it.
  *
  * Playwright reports frames as the browser actually sends and receives them, so
- * every recorded frame really travelled to the local signaling server on :3001
- * and back. No routing, stubbing or replaying is involved.
+ * every recorded frame really travelled to the Cloudflare signaling worker on
+ * :8787 and back. No routing, stubbing or replaying is involved.
  */
 
 export type FrameDirection = 'sent' | 'received';

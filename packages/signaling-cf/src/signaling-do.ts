@@ -1,5 +1,9 @@
 import { DurableObject } from 'cloudflare:workers';
-import { Actions, type Message, type TurnCredentialsMessage } from '@repo/signaling-types/messages';
+import {
+  Actions,
+  type Message,
+  type TurnCredentialsMessage
+} from '@repo/signaling-types/messages';
 import { CloudflareSignalingGateway } from './adapters/gateways/cloudflare-signaling-gateway.js';
 import { MeteredTurnCredentialGateway } from './adapters/gateways/metered-turn-credential-gateway.js';
 import { DoConnectionRepository } from './adapters/repositories/do-connection-repository.js';
@@ -33,6 +37,12 @@ export class SignalingDO extends DurableObject<Env> {
           is_available INTEGER DEFAULT 0
         )
       `);
+      // Durable Object storage persists across instances and restarts
+      // (`wrangler dev` keeps it in .wrangler/state). Any row left over from a
+      // previous session belongs to a WebSocket that no longer exists, so purge
+      // it: a stale is_available=1 row would otherwise match the next START
+      // against a ghost peer and make the caller wait forever.
+      ctx.storage.sql.exec('DELETE FROM connections');
     });
 
     this.gateway = new CloudflareSignalingGateway(ctx);
@@ -44,6 +54,18 @@ export class SignalingDO extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/health') {
+      return new Response(
+        JSON.stringify({
+          peers: this.ctx.getWebSockets().length,
+          available: await this.repo.countAvailable()
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const upgradeHeader = request.headers.get('Upgrade');
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 });

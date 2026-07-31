@@ -3,16 +3,17 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * E2E configuration for the real WebRTC stack.
  *
- * Nothing is mocked. Playwright boots the real local WebSocket signaling server
- * (`@repo/signaling-ws` on :3001) and the Vite dev server (:5173); the tests then
- * drive Chromium's own RTCPeerConnection, ICE and SDP machinery. Determinism
- * comes from Chromium's fake capture device, not from stubs.
+ * Nothing is mocked. Playwright boots the real Cloudflare signaling worker
+ * (`@repo/signaling-cf` via `wrangler dev` on :8787) and the Vite dev server
+ * (:5173); the tests then drive Chromium's own RTCPeerConnection, ICE and SDP
+ * machinery. Determinism comes from Chromium's fake capture device, not from
+ * stubs.
  *
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: './e2e',
-  // All peers share one in-memory signaling server with a single matching pool,
+  // All peers share one signaling Durable Object with a single matching pool,
   // so concurrent tests would cross-match each other's peers.
   fullyParallel: false,
   workers: 1,
@@ -52,20 +53,21 @@ export default defineConfig({
 
   webServer: [
     {
-      // Real signaling server; readiness is gated on its /health endpoint.
-      command: 'pnpm --filter @repo/signaling-ws dev',
-      url: 'http://localhost:3001/health',
+      // Real Cloudflare signaling worker; readiness is gated on /health,
+      // which the worker's Durable Object exposes.
+      command: 'pnpm --filter @repo/signaling-cf dev --port 8787',
+      url: 'http://localhost:8787/health',
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
       stderr: 'pipe',
       timeout: 60_000
     },
     {
-      // The app under test must point at the local signaling server, so the
+      // The app under test must point at the local signaling worker, so the
       // suite owns its dev server instead of inheriting one:
       // - `dev:local` forces VITE_LOCAL_MODE=true, overriding a machine's
       //   .env.local / shell VITE_SIGNALING_URL (which would otherwise send the
-      //   peers to the deployed AWS signaling server);
+      //   peers to the deployed Cloudflare worker);
       // - a dedicated port with `reuseExistingServer: false` means a `pnpm dev`
       //   already running on 5173 — configured however that developer likes —
       //   is never reused. `--strictPort` turns a leftover process into an

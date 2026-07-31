@@ -1,21 +1,21 @@
 import { expect } from '@playwright/test';
 
 /**
- * Read-only view of the real local signaling server.
+ * Read-only view of the real signaling server.
  *
- * `packages/signaling-ws/src/local-server/index.ts` exposes GET /health next to
- * the WebSocket endpoint. Reading it lets the test assert on genuine server
- * state instead of guessing from the UI.
+ * The Cloudflare Worker (`@repo/signaling-cf`, served locally by `wrangler dev`)
+ * exposes GET /health next to the /ws WebSocket endpoint. Reading it lets the
+ * test assert on genuine server state instead of guessing from the UI.
  */
 
-const SIGNALING_HOST = 'localhost:3001';
+const SIGNALING_HOST = 'localhost:8787';
 const HEALTH_URL = `http://${SIGNALING_HOST}/health`;
 
 /**
  * WebSocket endpoint the app connects to in local mode (see src/config.ts).
  * Used to tell the signaling socket apart from Vite's HMR socket.
  */
-export const SIGNALING_WS_URL = `ws://${SIGNALING_HOST}`;
+export const SIGNALING_WS_URL = `ws://${SIGNALING_HOST}/ws`;
 
 export interface SignalingServerHealth {
   /** WebSocket connections the server currently holds. */

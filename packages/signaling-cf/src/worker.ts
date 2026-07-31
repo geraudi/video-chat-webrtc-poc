@@ -6,7 +6,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === '/ws' || url.pathname === '/websocket') {
+    if (
+      url.pathname === '/ws' ||
+      url.pathname === '/websocket' ||
+      url.pathname === '/health'
+    ) {
       const stub = env.SIGNALING_DO.getByName('default');
       return stub.fetch(request);
     }

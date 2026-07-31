@@ -9,4 +9,5 @@ export interface IConnectionRepository {
   setUnavailable(id: string): Promise<void>;
   create(connectionId: string): Promise<void>;
   delete(connectionId: string): Promise<void>;
+  countAvailable(): Promise<number>;
 }

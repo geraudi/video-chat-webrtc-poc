@@ -46,4 +46,13 @@ export class DoConnectionRepository implements IConnectionRepository {
       connectionId
     );
   }
+
+  async countAvailable(): Promise<number> {
+    const row = this.ctx.storage.sql
+      .exec<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM connections WHERE is_available = 1'
+      )
+      .toArray()[0];
+    return row?.n ?? 0;
+  }
 }
