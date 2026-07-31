@@ -12,6 +12,8 @@ dist
 
 # local env files
 .env*.local
+.dev.vars
+.wrangler
 
 .turbo
 .biome
@@ -23,3 +25,4 @@ infra/outputs.json
 playwright-report
 test-results
 sandbox
+

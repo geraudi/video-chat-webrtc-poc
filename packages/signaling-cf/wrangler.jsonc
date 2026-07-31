@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "webrtc-signaling",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-04-07",
+  "account_id": "f638b2f9e76dbb01a8651b7be6e8172f",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SIGNALING_DO",
+        "class_name": "SignalingDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SignalingDO"]
+    }
+  ],
+  "vars": {
+    "METERED_APP_DOMAIN": "",
+    "METERED_SECRET_KEY": ""
+  }
+}

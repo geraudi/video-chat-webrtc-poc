@@ -7,7 +7,8 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "check-types": "turbo check-types",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "deploy:cf": "pnpm --filter @repo/signaling-cf run deploy"
   },
   "keywords": [],
   "author": "",

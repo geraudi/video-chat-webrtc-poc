@@ -91,6 +91,59 @@ One shared piece of state can break a run: a browser tab left on
 matched with one of the test's peers. The suite checks for this first and fails
 with an explicit message rather than timing out.
 
+## Deploy to Cloudflare (Workers + Durable Objects)
+
+The signaling backend also runs as a Cloudflare Worker with a Durable Object (`packages/signaling-cf`) — WebSocket Hibernation + embedded SQLite replace API Gateway, Lambda and Turso. See `docs/signaling/MIGRATE_TO_CLOUDFLARE.md` for the full migration notes.
+
+### 1. Authenticate
+
+```bash
+npx wrangler login        # opens a browser to authorize
+# or: export CLOUDFLARE_API_TOKEN=<token>
+npx wrangler whoami       # verify login
+```
+
+### 2. Configure account
+
+Add your Cloudflare `account_id` (from `wrangler whoami`) to `packages/signaling-cf/wrangler.jsonc`:
+
+```jsonc
+"account_id": "your-account-id",
+```
+
+### 3. Set Metered credentials as secrets
+
+Do **not** hardcode them in `wrangler.jsonc`. Set them as encrypted secrets:
+
+```bash
+cd packages/signaling-cf
+npx wrangler secret put METERED_APP_DOMAIN
+npx wrangler secret put METERED_SECRET_KEY
+```
+
+### 4. Test locally
+
+```bash
+pnpm --filter @repo/signaling-cf dev     # wrangler dev → ws://localhost:8787
+```
+
+Point the frontend at it and test a call between two tabs. For local dev, set the `vars` block in `wrangler.jsonc` instead of secrets.
+
+### 5. Deploy
+
+```bash
+pnpm run deploy:cf           # root script → wrangler deploy in packages/signaling-cf
+```
+
+### 6. Point the frontend at it
+
+The Worker serves WebSockets on the `/ws` path, so set:
+
+```
+VITE_LOCAL_MODE=false
+VITE_SIGNALING_URL=wss://webrtc-signaling.<your-subdomain>.workers.dev/ws
+```
+
 ## Deploy to AWS
 
 Always deploy from the repo root via Turborepo — it builds the dependencies first (lints, then builds `signaling-types`, `signaling-ws` → `dist/`, and `frontend`) **before** running Pulumi. `signaling-ws#build` regenerates the per-Lambda bundles in `dist/` that Pulumi zips; skipping it deploys stale or missing artifacts.

@@ -1,0 +1,24 @@
+{
+  "name": "@repo/signaling-cf",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check-types": "tsc --noEmit",
+    "lint": "biome check . --fix",
+    "clean": "git clean -xdf .turbo node_modules"
+  },
+  "dependencies": {
+    "@repo/signaling-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@types/webrtc": "^0.0.38",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.116.0"
+  }
+}

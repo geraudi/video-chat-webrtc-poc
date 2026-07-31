@@ -29,5 +29,5 @@
       "dependsOn": ["@repo/signaling-types#build"]
     }
   },
-  "globalEnv": ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"]
+  "globalEnv": ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "METERED_APP_DOMAIN", "METERED_SECRET_KEY"]
 }
