@@ -7,8 +7,7 @@
       "!**/dist/**",
       "!**/build/**",
       "!**/.turbo/**",
-      "!**/.open-next/**",
-      "!**/infra/outputs.json"
+      "!**/.open-next/**"
     ]
   },
   "formatter": {

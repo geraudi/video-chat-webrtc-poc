@@ -1,5 +1,9 @@
 # Migration: AWS → Cloudflare Workers + Durable Objects
 
+> **Status: complete.** The migration is done and AWS has been decommissioned —
+> `packages/signaling-ws` (Lambda handlers) and `infra` (Pulumi) have been deleted.
+> See the current architecture in `ARCHITECTURE.md`.
+
 ## 1. Why Durable Objects Fit This App Perfectly
 
 The signaling server is a **stateful coordination problem** — exactly what DOs are designed for:

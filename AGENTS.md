@@ -1,18 +1,16 @@
 # AGENTS.md — Video Chat WebRTC POC
 
 ## Project Overview
-Peer-to-peer video chat application using WebRTC, deployed on AWS with WebSocket signaling. Built as a Turborepo monorepo.
+Peer-to-peer video chat application using WebRTC, deployed on Cloudflare Workers with WebSocket signaling. Built as a Turborepo monorepo.
 
 ## Monorepo Structure
 ```
 video-chat-webrtc-poc/
 ├── apps/
 │   └── frontend/          # React + Vite web client
-├── infra/                 # Pulumi infrastructure as code (AWS)
 ├── packages/
 │   ├── signaling-types/   # Shared TypeScript message types
 │   ├── signaling-core/    # Shared ports, domain models, use cases + Metered adapter
-│   ├── signaling-ws/      # WebSocket Lambda handlers (AWS) — platform adapters only
 │   ├── signaling-cf/      # Cloudflare Worker + Durable Object — platform adapters only
 │   ├── ui/                # Shared UI components
 │   └── typescript-config/ # Shared TypeScript configs
@@ -42,29 +40,24 @@ pnpm preview              # Preview production build
 pnpm check-types           # Type-check only
 ```
 
-### Infrastructure
+### Cloudflare Signaling Worker
 ```bash
-cd infra
-pnpm run deploy           # Deploy to AWS (dev stack)
-pulumi stack select dev   # Select dev stack
-pulumi config set infra:dbUrl <turso-db-url>
-pulumi config set infra:dbToken <turso-auth-token>
+pnpm --filter @repo/signaling-cf dev       # wrangler dev → ws://localhost:8787/ws
+pnpm run deploy:cf                         # wrangler deploy (root script)
+cd packages/signaling-cf
+npx wrangler secret put METERED_APP_DOMAIN # set Metered credentials as secrets
+npx wrangler secret put METERED_SECRET_KEY
 ```
 
 ### Prerequisites
 1. **Turbo repo** — `pnpm install turbo --global`
-2. **Pulumi** — `brew install pulumi/tap/pulumi`
-3. **AWS credentials** — configured via `aws configure` or env vars
-4. **Turso DB** — create a database and generate a token:
-   ```bash
-   turso db tokens create <db-name>
-   ```
+2. **Cloudflare account** — `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`)
 
 ## Key Technical Details
 
 ### WebRTC Flow
 1. User clicks "Start" → sends `START` message via WebSocket
-2. Server matches with available peer via Turso DB lookup
+2. Durable Object matches with available peer via embedded SQLite lookup
 3. Both peers receive `initOffer` with roles (caller/callee) and strangerId
 4. Caller creates SDP offer → sent via `videoOffer` message
 5. Callee responds with SDP answer → sent via `videoAnswer` message
@@ -81,16 +74,15 @@ pulumi config set infra:dbToken <turso-auth-token>
 | `newIceCandidate` | Client → Server → Client | NAT traversal candidates |
 | `hangUp` | Client → Server → Client | Terminate call |
 
-### WebSocket Lambda Handlers (from `packages/signaling-ws/`)
-| Handler | Route Selection | Purpose |
-|---------|-----------------|---------|
-| `ws-start/index.ts` | `START` | Peer matching logic |
-| `ws-video-offer/index.ts` | `videoOffer` | Forward SDP offer |
-| `ws-video-answer/index.ts` | `videoAnswer` | Forward SDP answer |
-| `ws-new-ice-candidate/index.ts` | `newIceCandidate` | Forward ICE candidate |
-| `ws-hang-up/index.ts` | `hangUp` | Notify peer to hang up |
-| `ws-connect/index.ts` | `$connect` | New WS connection |
-| `ws-disconnect/index.ts` | `$disconnect` | Clean up connection |
+### Cloudflare Worker + Durable Object (from `packages/signaling-cf/`)
+| File | Role |
+|------|------|
+| `src/worker.ts` | Thin entrypoint — routes `/ws`, `/websocket`, `/health` to the DO stub |
+| `src/signaling-do.ts` | `SignalingDO` — WebSocket Hibernation, SQLite schema, connects adapters to use cases, dispatches messages |
+| `src/adapters/gateways/cloudflare-signaling-gateway.ts` | `ISignalingGateway` — in-process `ws.send()` via `getWebSockets()` |
+| `src/adapters/repositories/do-connection-repository.ts` | `IConnectionRepository` — synchronous DO SQLite storage |
+
+The `SignalingDO` uses the WebSocket Hibernation API: `fetch()` accepts the upgrade and runs `ConnectPeer`, `webSocketMessage()` parses the action and dispatches to `FindStranger` / `ForwardMessage` / `RequestTurnCredentials`, `webSocketClose()` runs `DisconnectPeer`.
 
 ### Frontend Architecture (from `apps/frontend/src/`)
 ```
@@ -106,27 +98,24 @@ src/
 └── config.ts             # Environment configuration
 ```
 
-### Database Schema (Turso/LibSQL)
+### Database Schema (Durable Object SQLite)
 ```sql
-CREATE TABLE connection (
+CREATE TABLE connections (
   id TEXT PRIMARY KEY,
-  isAvailable INTEGER DEFAULT 0
+  is_available INTEGER DEFAULT 0
 );
 ```
-- `id` = API Gateway connectionId
-- `isAvailable = 1` means user is waiting for a match
+- `id` = generated connectionId (UUID)
+- `is_available = 1` means user is waiting for a match
 
 ## Environment Variables (required for deployment)
 | Variable | Purpose |
 |----------|---------|
-| `TURSO_AUTH_TOKEN` | Turso database authentication token |
-| `TURSO_DB_URL` | Turso database connection URL |
-| `AWS_ACCESS_KEY_ID` | AWS credentials |
-| `AWS_SECRET_ACCESS_KEY` | AWS credentials |
-| `AWS_DEFAULT_REGION` | Typically `us-east-1` |
+| `METERED_APP_DOMAIN` | Metered TURN app domain |
+| `METERED_SECRET_KEY` | Metered TURN secret key |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (alternative to `wrangler login`) |
 
 ## Known Limitations
 - Only Google STUN server (no TURN — fails behind symmetric NAT/firewalls)
-- Single-region deployment (us-east-1)
 - No authentication/authorization on WebSocket connections
-- Uses React 19 RC versions (may have stability implications)
+- Single Durable Object instance (all peers share one matching pool)

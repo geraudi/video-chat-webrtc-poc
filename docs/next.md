@@ -42,11 +42,11 @@ const hangUpMessage: HangUpMessage = {
 sendToServer(hangUpMessage);  // → WebSocket JSON: {"action": "HANG_UP", "strangerId": "abc123"}
 ```
 
-**Server-side handling** (packages/signaling-ws/src/ws-hang-up/index.ts):
+**Server-side handling** (packages/signaling-cf/src/signaling-do.ts, `webSocketMessage`):
 - Receives `HANG_UP` with `strangerId`
-- Looks up stranger's connectionId from Turso DB
+- Looks up stranger's connectionId from the Durable Object SQLite storage
 - Forwards `HANG_UP` message to stranger's WebSocket connection
-- Marks current connection as unavailable in DB
+- Marks current connection as unavailable in the DB
 
 **Second: `startChat()` sends `START` message** (chat.ts line 188-193)
 ```typescript
@@ -56,9 +56,9 @@ const startMessage: StartMessage = {
 sendToServer(startMessage);  // → WebSocket JSON: {"action": "START"}
 ```
 
-**Server-side handling** (packages/signaling-ws/src/ws-start/index.ts):
+**Server-side handling** (packages/signaling-cf/src/signaling-do.ts, `webSocketMessage`):
 - Receives `START`
-- Marks connection as available in Turso DB (`isAvailable = 1`)
+- Marks connection as available in the Durable Object SQLite storage (`is_available = 1`)
 - Looks for another available peer
 - If found: sends `initOffer` to both peers with roles and strangerId
 - If not found: waits until someone else becomes available

@@ -1,10 +1,11 @@
-# `signaling-ws` — Architecture Ports & Adapters
+# `signaling-cf` — Architecture Ports & Adapters
 
-Sept Lambdas WebSocket partagent un même cœur métier. Le domaine définit des contrats
-(les **ports**), les use cases les consomment sans savoir qui les implémente, et les
-**adapters** branchent le monde réel — Turso, API Gateway — ou des doublures locales pour le dev.
+Un seul Worker Cloudflare + un Durable Object (`SignalingDO`) partagent le même cœur
+métier que l'ancien backend. Le domaine définit des contrats (les **ports**), les use cases
+les consomment sans savoir qui les implémente, et les **adapters** branchent le monde réel —
+WebSocket Hibernation, SQLite Durable Object, API Metered.
 
-> **7** routes WS · **4** use cases · **2** ports · **4** adapters (2 prod / 2 dev) · runtime `nodejs20.x` / arm64
+> **4** actions WS + `fetch()` + `webSocketClose()` · **5** use cases · **3** ports · **3** adapters (2 signaling + 1 TURN) · Durable Object SQLite
 
 ---
 
@@ -16,13 +17,8 @@ l'exécution ; les flèches pointillées signifient « implémente ».
 ```mermaid
 flowchart LR
   subgraph pilotes["Pilotes — qui déclenche"]
-    GW["API Gateway WebSocket<br/>$connect · $disconnect · start<br/>videoOffer · videoAnswer<br/>newIceCandidate · hangUp"]
-    H["handlers/ws-*-handler.ts<br/>event → use case, via wrapHandler"]
-    LS["local-server/ (dev)<br/>serveur ws local"]
-  end
-
-  subgraph lib["lib/ — composition"]
-    DI["di-container.ts<br/>getters paresseux,<br/>endpoint depuis l'event"]
+    W["worker.ts<br/>route /ws · /websocket · /health"]
+    DO["signaling-do.ts<br/>SignalingDO (WebSocket Hibernation)<br/>fetch() · webSocketMessage() · webSocketClose()"]
   end
 
   subgraph usecases["usecases/ — le métier, pur"]
@@ -30,51 +26,49 @@ flowchart LR
     FM["ForwardMessage"]
     CP["ConnectPeer"]
     DP["DisconnectPeer"]
+    RT["RequestTurnCredentials"]
   end
 
   subgraph domaine["domains/ — ports & modèle"]
     RP["IConnectionRepository<br/>findAvailable · create · delete<br/>setAvailable · setUnavailable"]
     SG["ISignalingGateway<br/>send(connectionId, message)"]
+    TG["ITurnCredentialGateway<br/>getCredentials()"]
   end
 
   subgraph adapters["adapters/ — implémentations"]
-    TU["TursoConnectionRepository (prod)"]
-    AG["AwsApiGatewaySignalingGateway (prod)"]
-    IM["InMemoryConnectionRepository (dev)"]
-    LG["LocalWebSocketGateway (dev)"]
+    DR["DoConnectionRepository (SQLite)"]
+    CG["CloudflareSignalingGateway (in-process ws.send)"]
+    MG["MeteredTurnCredentialGateway (fetch)"]
   end
 
   subgraph externe["Monde extérieur"]
-    DB[("Turso<br/>table connection")]
-    MGMT["API GW Management<br/>POST @connections/*"]
-    BR["Navigateurs (pairs WebRTC)"]
+    DB[("DO SQLite<br/>table connections")]
+    WS["Navigateurs (pairs WebRTC)"]
+    ME["API Metered (TURN)"]
   end
 
-  GW --> H --> DI
-  DI --> FS
-  DI --> FM
-  DI --> CP
-  DI --> DP
-  LS --> FS
-  LS --> FM
-  LS --> CP
-  LS --> DP
+  W --> DO
+  DO --> FS
+  DO --> FM
+  DO --> CP
+  DO --> DP
+  DO --> RT
 
   FS --> RP
   FS --> SG
   FM --> SG
   CP --> RP
   DP --> RP
+  RT --> TG
+  RT --> SG
 
-  TU -. implémente .-> RP
-  IM -. implémente .-> RP
-  AG -. implémente .-> SG
-  LG -. implémente .-> SG
+  DR -. implémente .-> RP
+  CG -. implémente .-> SG
+  MG -. implémente .-> TG
 
-  TU --> DB
-  AG --> MGMT
-  MGMT --> BR
-  LG --> BR
+  DR --> DB
+  CG --> WS
+  MG --> ME
 
   classDef entry fill:#eceaf8,stroke:#5d53b8,color:#1f2328
   classDef uc fill:#e8eefa,stroke:#2a5fc0,color:#1f2328
@@ -82,61 +76,52 @@ flowchart LR
   classDef adap fill:#f8eedc,stroke:#a3610f,color:#1f2328
   classDef ext fill:transparent,stroke:#5d6e73,stroke-dasharray:4 3
 
-  class GW,H,LS,DI entry
-  class FS,FM,CP,DP uc
-  class RP,SG dom
-  class TU,AG,IM,LG adap
-  class DB,MGMT,BR ext
+  class W,DO entry
+  class FS,FM,CP,DP,RT uc
+  class RP,SG,TG dom
+  class DR,CG,MG adap
+  class DB,WS,ME ext
 ```
 
 La flèche « implémente » est le cœur du pattern : les adapters dépendent de `domains/`,
-jamais l'inverse. Le domaine ne connaît ni AWS, ni Turso, ni même l'existence des Lambdas —
-il n'importe que les types `Message` de `@repo/signaling-types`.
+jamais l'inverse. Le domaine ne connaît ni Cloudflare, ni Metered — il n'importe que les
+types `Message` de `@repo/signaling-types`.
 
 ---
 
 ## Règles de dépendance : ce que chaque brique a le droit d'importer
 
-C'est cette règle qui rend le cœur testable et les adapters remplaçables. Toutes les
-flèches d'import convergent vers `domains/`.
+Toutes les flèches d'import convergent vers `domains/` — c'est ce qui rend le cœur testable
+et les adapters remplaçables.
 
 | Brique | Rôle | Importe | N'importe jamais |
 |---|---|---|---|
-| `domains/` | Modèle `Connection` + les 2 ports (interfaces pures) | `@repo/signaling-types` uniquement | use cases, adapters, SDK |
-| `usecases/` | Logique de matching et de relais, sans I/O direct | `domains/` (les ports, en types) | un adapter concret, `@aws-sdk`, `@libsql` |
-| `adapters/` | Implémentations techniques des ports | `domains/` + SDK externes (`@libsql/client/web`, `@aws-sdk`, `ws`) | use cases, handlers |
-| `handlers/` | Event Lambda → use case → réponse HTTP | `lib/` (DI + `wrapHandler`) | un adapter directement |
-| `lib/` | Composition root : le **seul** endroit qui connaît les adapters de prod | adapters + use cases + `aws-lambda` (types) | — |
-| `ws-*/index.ts` | Points d'entrée bundlés (1 par Lambda), simples re-exports | son handler | — |
-| `local-server/` | Harnais de dev : câble lui-même use cases + adapters in-memory | use cases + adapters locaux | adapters de prod |
+| `@repo/signaling-core/src/domains/` | Modèle `Connection` + les ports (interfaces pures) | `@repo/signaling-types` uniquement | use cases, adapters, SDK |
+| `@repo/signaling-core/src/usecases/` | Logique de matching, relais et TURN, sans I/O direct | `domains/` (les ports, en types) | un adapter concret, `cloudflare:workers`, SDK |
+| `@repo/signaling-cf/src/adapters/` | Implémentations techniques des ports | `domains/` + API Durable Object | use cases, handlers |
+| `@repo/signaling-cf/src/signaling-do.ts` | Composition root : câble les use cases avec les adapters, fait la bascule sur `action` | adapters + use cases + `cloudflare:workers` | — |
+| `@repo/signaling-cf/src/worker.ts` | Entrypoint HTTP : route `/ws`, `/websocket`, `/health` vers le stub DO | `signaling-do.ts` (types + classe DO) | — |
 
-Deux garde-fous transverses dans `lib/` :
-
-- **`di-container.ts`** — getters paresseux : chaque Lambda ne paie que les dépendances de
-  *son* use case. Le endpoint de callback vient de `event.requestContext`, pas d'une
-  variable d'environnement.
-- **`wrap-handler.ts`** — try/catch commun : erreur loggée avec le nom de l'action,
-  réponse 500 contrôlée au lieu d'un crash opaque.
+Le Durable Object fait office de **composition root unique** : contrairement aux Lambdas
+(une composition par handler), le constructeur câble une fois use cases et adapters.
 
 ---
 
-## Câblage route par route
+## Câblage entrée par entrée
 
-Grâce au conteneur paresseux, les quatre routes de relais tournent **sans aucune variable
-d'environnement**.
+Le `SignalingDO` expose trois hooks de cycle de vie, tous branchés sur le même jeu d'adapters.
 
-| Route WS | Lambda | Use case | Ports | Adapters (prod) | Env requises |
+| Entrée | Hooks | Use case | Ports | Adapters (prod) | Env requises |
 |---|---|---|---|---|---|
-| `$connect` | `WebSocket_Connect` | ConnectPeer | repo | Turso | `TURSO_*` |
-| `$disconnect` | `WebSocket_Disconnect` | DisconnectPeer | repo | Turso | `TURSO_*` |
-| `start` | `WebSocket_Start` | FindStranger | repo + gateway | Turso + API GW Management | `TURSO_*` |
-| `videoOffer` | `WebSocket_VideoOffer` | ForwardMessage | gateway | API GW Management | *aucune* |
-| `videoAnswer` | `WebSocket_VideoAnswer` | ForwardMessage | gateway | API GW Management | *aucune* |
-| `newIceCandidate` | `WebSocket_NewIceCandidate` | ForwardMessage | gateway | API GW Management | *aucune* |
-| `hangUp` | `WebSocket_HangUp` | ForwardMessage | gateway | API GW Management | *aucune* |
+| `GET /ws` (upgrade) | `fetch()` | ConnectPeer | repo | DoConnectionRepository | — |
+| `WS message` `start` | `webSocketMessage()` | FindStranger | repo + gateway | DO SQLite + Cloudflare gateway | — |
+| `WS message` `videoOffer` / `videoAnswer` / `newIceCandidate` / `hangUp` | `webSocketMessage()` | ForwardMessage | gateway | Cloudflare gateway | — |
+| `WS message` `requestTurnCredentials` | `webSocketMessage()` | RequestTurnCredentials | gateway TURN + signaling | Metered + Cloudflare gateway | `METERED_*` |
+| `WS close` | `webSocketClose()` | DisconnectPeer | repo | DO SQLite | — |
+| `GET /health` | `fetch()` | — | repo | DO SQLite | — |
 
-Le gateway construit son endpoint depuis `event.requestContext.domainName` + `stage` —
-plus besoin de `DOMAIN_NAME`/`STAGE` dans l'infra.
+Le gateway retrouve la WebSocket cible via `ctx.getWebSockets()` + l'`attachment`
+(`connectionId`), puis appelle `ws.send()` en process — aucun aller-retour HTTP par message.
 
 ---
 
@@ -148,16 +133,14 @@ Le seul scénario qui traverse les deux ports à la fois — c'est lui qui justi
 sequenceDiagram
   autonumber
   participant B as Client B
-  participant GW as API Gateway WS
-  participant L as Lambda ws-start
+  participant DO as SignalingDO
   participant UC as FindStranger
-  participant R as repo (Turso)
-  participant G as gateway (API GW Mgmt)
+  participant R as repo (DO SQLite)
+  participant G as gateway (CloudflareSignalingGateway)
   participant A as Client A (en attente)
 
-  B->>GW: {action: "start"}
-  GW->>L: invoke(event)
-  L->>UC: execute(connB)
+  B->>DO: {action: "start"}
+  DO->>UC: execute(connB)
   UC->>R: findAvailable(connB)
   alt un pair est disponible
     R-->>UC: connexion A
@@ -168,48 +151,51 @@ sequenceDiagram
     G-->>A: initOffer {role: callee, strangerId: B}
   else personne en attente
     UC->>R: setAvailable(B)
-    UC-->>L: {status: "waiting"}
+    UC-->>DO: {status: "waiting"}
   end
 ```
 
+L'atomicité du matching vient des input gates du Durable Object : `findAvailable` +
+`setUnavailable` s'exécutent sans interleaving, ce qui élimine la course au matching que
+deux `START` concurrents créaient avec la base distante.
+
 ---
 
-## Du source au Lambda : le trajet d'un handler
+## Cycle de vie d'une WebSocket dans le Durable Object
 
 ```text
-src/ws-start/index.ts        re-export du handler
+worker.ts (route /ws)
+        │  request Upgrade
+        ▼
+stub SIGNALING_DO.fetch(request)     → DoConnectionRepository: CREATE TABLE IF NOT EXISTS
+        │  acceptWebSocket(server) + serializeAttachment({ connectionId })
+        ▼
+ConnectPeer.execute(connectionId)    → INSERT connection (id, is_available=0)
         │
         ▼
-bundler.mjs                  esbuild · CJS · target node20 · minify + sourcemap
-        │
+webSocketMessage(ws, message)        → JSON.parse → dispatch sur msg.action
+        │  (START → FindStranger · video*/hangUp → ForwardMessage · TURN → RequestTurnCredentials)
         ▼
-dist/ws-start/index.js+.map  bundle hermétique, toutes deps incluses (aucun `external`)
-        │
-        ▼
-Pulumi FileArchive           infra/src/start-lambda.ts
-        │
-        ▼
-λ WebSocket_Start            nodejs20.x · arm64 · handler `index.handler`
+webSocketClose()                     → DisconnectPeer.execute(connectionId) → DELETE row
 ```
 
-Les `.map` sont déployées dans le zip et lues par `NODE_OPTIONS=--enable-source-maps` :
-les stack traces CloudWatch pointent sur le TypeScript, pas sur le bundle minifié.
+`ctx.storage.sql` est synchrone et co-localisé : aucune latence réseau pour lire/écrire
+l'état de matching, et pas de connexion externe à gérer.
 
 ---
 
 ## Où intervenir selon le besoin
 
 - **Changer de base de données** — écrire un nouvel adapter de `IConnectionRepository` dans
-  `adapters/repositories/`, puis changer une ligne dans `lib/di-container.ts`. Ni les use
-  cases, ni les handlers ne bougent.
-- **Ajouter une action WebSocket** — un handler dans `handlers/` + une entrée
-  `src/ws-*/index.ts` déclarée dans `bundler.mjs` + la route côté `infra/`. Si c'est un
-  simple relais, `ForwardMessage` existe déjà.
-- **Tester la logique de matching** — instancier `FindStranger` avec
-  `InMemoryConnectionRepository` et un faux gateway : aucun mock d'AWS nécessaire. C'est
-  exactement ce que fait `local-server/` (`pnpm dev`).
+  `@repo/signaling-cf/src/adapters/repositories/`, puis changer le constructeur du DO. Ni les
+  use cases, ni le worker ne bougent.
+- **Ajouter une action WebSocket** — un `case` dans `webSocketMessage()` ; si c'est un simple
+  relais, `ForwardMessage` existe déjà.
+- **Tester la logique de matching** — instancier `FindStranger` avec un repo in-memory et un
+  faux gateway : aucun mock de Cloudflare nécessaire. C'est le même cœur métier testé
+  unitairement depuis l'époque des Lambdas.
 
 ---
 
-*Schéma établi depuis le code réel de `packages/signaling-ws/src` — branche
-`refactor-signaling-ws`, juillet 2026.*
+*Schéma établi depuis le code réel de `packages/signaling-cf/src` — après décommission d'AWS
+(`packages/signaling-ws` + `infra`), juillet 2026.*

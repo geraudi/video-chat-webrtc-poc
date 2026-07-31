@@ -6,17 +6,6 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
-    "deploy": {
-      "dependsOn": [
-        "lint",
-        "@repo/signaling-core#check-types",
-        "@repo/signaling-ws#check-types",
-        "@repo/signaling-types#build",
-        "@repo/signaling-ws#build",
-        "@repo/frontend#build"
-      ],
-      "outputs": []
-    },
     "check-types": {
       "dependsOn": ["^check-types"]
     },
@@ -30,5 +19,5 @@
       "dependsOn": ["@repo/signaling-types#build"]
     }
   },
-  "globalEnv": ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN", "METERED_APP_DOMAIN", "METERED_SECRET_KEY"]
+  "globalEnv": ["METERED_APP_DOMAIN", "METERED_SECRET_KEY"]
 }

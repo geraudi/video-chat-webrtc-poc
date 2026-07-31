@@ -22,9 +22,9 @@ graph TB
         A15["hangUpCall"]
     end
 
-    subgraph Server["🔧 Signaling Server<br/>AWS API Gateway + Lambda"]
-        S1["ws-start Lambda"]
-        S2["DB Lookup:<br/>WHERE isAvailable=1"]
+    subgraph Server["🔧 Signaling Server<br/>Cloudflare Worker + Durable Object"]
+        S1["webSocketMessage<br/>START dispatch"]
+        S2["SQLite Lookup:<br/>WHERE is_available=1"]
         S3["Match found!"]
         S4["Forward SDP offer<br/>to callee"]
         S5["Forward SDP answer<br/>to caller"]
@@ -32,8 +32,8 @@ graph TB
         S7["Forward hangUp<br/>to peer"]
     end
 
-    subgraph DB["🗄️ Turso DB<br/>connection table"]
-        D1["Connection Record<br/>id | isAvailable"]
+    subgraph DB["🗄️ DO SQLite<br/>connections table"]
+        D1["Connection Record<br/>id | is_available"]
     end
 
     subgraph ClientB["🖥️ Peer B (Browser)"]
@@ -98,8 +98,8 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant A as Peer A (Caller)
-    participant GW as API Gateway + Lambda<br/>Signaling Server
-    participant DB as Turso DB
+    participant GW as Cloudflare Worker + DO<br/>Signaling Server
+    participant DB as DO SQLite
     participant B as Peer B (Callee)
 
     Note over A,B: Phase 1: Peer Discovery Matching
@@ -107,19 +107,19 @@ sequenceDiagram
     A->>GW: WebSocket connect
     GW-->>A: Connected
     
-    A->>DB: INSERT connection (id, isAvailable=0)
+    A->>DB: INSERT connection (id, is_available=0)
     
     A->>GW: WebSocket START
     activate GW
-    GW->>DB: SELECT FROM connection<br/>WHERE isAvailable=1
+    GW->>DB: SELECT FROM connections<br/>WHERE is_available=1
     DB-->>GW: Available peer B found
     
     alt Peer B available
-        GW->>DB: UPDATE set isAvailable=0
+        GW->>DB: UPDATE set is_available=0
         GW-->>A: initOffer role=caller strangerId=B
         GW-->>B: initOffer role=callee strangerId=A
     else No peer available
-        GW->>DB: UPDATE set isAvailable=1
+        GW->>DB: UPDATE set is_available=1
         GW-->>A: Available (waiting for match)
     end
     deactivate GW
@@ -176,24 +176,23 @@ sequenceDiagram
 
 ---
 
-## WebSocket Lambda Handlers Reference
+## Durable Object Message Dispatch Reference
 
-### Peer Matching (ws-start)
-- **Route**: `START` action
-- **Logic**: Query Turso DB for available peer (`WHERE isAvailable=1`). If found, mark both as unavailable and send `initOffer` to both with role assignment. Otherwise, set sender as `isAvailable=1` to wait.
+The `SignalingDO.webSocketMessage()` in `packages/signaling-cf/src/signaling-do.ts` dispatches on the message `action`:
 
-### SDP Forwarding (ws-video-offer / ws-video-answer)
-- **Routes**: `videoOffer`, `videoAnswer` actions
-- **Logic**: Look up callee's connectionId by caller's peerId in DB, then post SDP to their WebSocket endpoint via API Gateway `postToConnection`
+### Peer Matching (`START`)
+- **Logic**: Run `FindStranger` — query SQLite for an available peer (`WHERE is_available=1`). If found, mark both unavailable and send `initOffer` to both with role assignment. Otherwise, set sender as `is_available=1` to wait.
 
-### ICE Candidate Forwarding (ws-new-ice-candidate)
+### SDP Forwarding (`videoOffer` / `videoAnswer`)
+- **Logic**: Run `ForwardMessage` — look up the target connectionId in SQLite and `ws.send()` the message in-process via `CloudflareSignalingGateway`.
+
+### ICE Candidate Forwarding (`newIceCandidate`)
 - **Route**: `newIceCandidate` action
-- **Logic**: Similar to SDP forwarding - look up target connectionId and forward the candidate
+- **Logic**: Same as SDP forwarding — forward the candidate to the peer's WebSocket.
 
-### Call Termination (ws-hang-up)
+### Call Termination (`hangUp`)
 - **Route**: `hangUp` action
-- **Logic**: Notify peer of hangup, clean up DB record
+- **Logic**: Notify peer of hangup, clean up the connection record.
 
-### Connection Lifecycle (ws-connect / ws-disconnect)
-- **Routes**: `$connect`, `$disconnect` events
-- **Logic**: Insert/remove connection records from the `connection` table on connect/disconnect
+### Connection Lifecycle (`fetch()` / `webSocketClose()`)
+- **Logic**: `fetch()` accepts the WebSocket upgrade, generates the connectionId and runs `ConnectPeer`; `webSocketClose()` runs `DisconnectPeer` to remove the record from the `connections` table.
