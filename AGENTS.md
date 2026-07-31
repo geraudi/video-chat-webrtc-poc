@@ -11,7 +11,9 @@ video-chat-webrtc-poc/
 ├── infra/                 # Pulumi infrastructure as code (AWS)
 ├── packages/
 │   ├── signaling-types/   # Shared TypeScript message types
-│   ├── signaling-ws/      # WebSocket Lambda handlers
+│   ├── signaling-core/    # Shared ports, domain models, use cases + Metered adapter
+│   ├── signaling-ws/      # WebSocket Lambda handlers (AWS) — platform adapters only
+│   ├── signaling-cf/      # Cloudflare Worker + Durable Object — platform adapters only
 │   ├── ui/                # Shared UI components
 │   └── typescript-config/ # Shared TypeScript configs
 ├── package.json           # Root workspace config

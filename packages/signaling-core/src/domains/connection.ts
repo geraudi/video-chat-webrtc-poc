@@ -34,4 +34,10 @@ export interface IConnectionRepository {
    * Delete a connection record
    */
   delete(connectionId: string): Promise<void>;
+
+  /**
+   * Count how many connections are currently flagged as available (waiting
+   * for a match). Used by health/debug endpoints to expose matching state.
+   */
+  countAvailable(): Promise<number>;
 }

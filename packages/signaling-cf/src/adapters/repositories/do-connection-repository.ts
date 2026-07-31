@@ -1,7 +1,7 @@
 import type {
   Connection,
   IConnectionRepository
-} from '../../domains/connection.js';
+} from '@repo/signaling-core/domains/connection';
 
 export class DoConnectionRepository implements IConnectionRepository {
   constructor(private ctx: DurableObjectState) {}

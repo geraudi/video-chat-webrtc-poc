@@ -13,6 +13,7 @@
   "devDependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.1091.0",
     "@biomejs/biome": "^2.0.0",
+    "@repo/signaling-core": "workspace:*",
     "@repo/signaling-types": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/aws-lambda": "^8.10.162",

@@ -1,17 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
+import { MeteredTurnCredentialGateway } from '@repo/signaling-core/adapters/gateways/metered-turn-credential-gateway';
+import { ConnectPeer } from '@repo/signaling-core/usecases/connect-peer';
+import { DisconnectPeer } from '@repo/signaling-core/usecases/disconnect-peer';
+import { FindStranger } from '@repo/signaling-core/usecases/find-stranger';
+import { ForwardMessage } from '@repo/signaling-core/usecases/forward-message';
+import { RequestTurnCredentials } from '@repo/signaling-core/usecases/request-turn-credentials';
 import {
   Actions,
   type Message,
   type TurnCredentialsMessage
 } from '@repo/signaling-types/messages';
 import { CloudflareSignalingGateway } from './adapters/gateways/cloudflare-signaling-gateway.js';
-import { MeteredTurnCredentialGateway } from './adapters/gateways/metered-turn-credential-gateway.js';
 import { DoConnectionRepository } from './adapters/repositories/do-connection-repository.js';
-import { ConnectPeer } from './usecases/connect-peer.js';
-import { DisconnectPeer } from './usecases/disconnect-peer.js';
-import { FindStranger } from './usecases/find-stranger.js';
-import { ForwardMessage } from './usecases/forward-message.js';
-import { RequestTurnCredentials } from './usecases/request-turn-credentials.js';
 
 export interface Env {
   SIGNALING_DO: DurableObjectNamespace<SignalingDO>;
@@ -26,6 +26,7 @@ export class SignalingDO extends DurableObject<Env> {
   private forwardMessage: ForwardMessage;
   private connectPeer: ConnectPeer;
   private disconnectPeer: DisconnectPeer;
+  private requestTurnCredentials: RequestTurnCredentials | null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -51,6 +52,16 @@ export class SignalingDO extends DurableObject<Env> {
     this.forwardMessage = new ForwardMessage(this.gateway);
     this.connectPeer = new ConnectPeer(this.repo);
     this.disconnectPeer = new DisconnectPeer(this.repo);
+    this.requestTurnCredentials =
+      this.env.METERED_APP_DOMAIN && this.env.METERED_SECRET_KEY
+        ? new RequestTurnCredentials(
+            new MeteredTurnCredentialGateway(
+              this.env.METERED_APP_DOMAIN,
+              this.env.METERED_SECRET_KEY
+            ),
+            this.gateway
+          )
+        : null;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -110,7 +121,7 @@ export class SignalingDO extends DurableObject<Env> {
       }
 
       case Actions.REQUEST_TURN_CREDENTIALS: {
-        if (!this.env.METERED_APP_DOMAIN || !this.env.METERED_SECRET_KEY) {
+        if (!this.requestTurnCredentials) {
           await this.gateway.send(connectionId, {
             action: Actions.TURN_CREDENTIALS,
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -119,12 +130,7 @@ export class SignalingDO extends DurableObject<Env> {
           break;
         }
         try {
-          const turnGateway = new MeteredTurnCredentialGateway(
-            this.env.METERED_APP_DOMAIN,
-            this.env.METERED_SECRET_KEY
-          );
-          const uc = new RequestTurnCredentials(turnGateway, this.gateway);
-          await uc.execute(connectionId);
+          await this.requestTurnCredentials.execute(connectionId);
         } catch (err) {
           console.error('TURN credential fetch failed:', err);
         }

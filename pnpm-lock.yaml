@@ -142,6 +142,9 @@ importers:
 
   packages/signaling-cf:
     dependencies:
+      '@repo/signaling-core':
+        specifier: workspace:*
+        version: link:../signaling-core
       '@repo/signaling-types':
         specifier: workspace:*
         version: link:../signaling-types
@@ -164,6 +167,25 @@ importers:
       wrangler:
         specifier: ^4.116.0
         version: 4.116.0(@cloudflare/workers-types@5.20260730.1)
+
+  packages/signaling-core:
+    dependencies:
+      '@repo/signaling-types':
+        specifier: workspace:*
+        version: link:../signaling-types
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.0.0
+        version: 2.5.5
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
   packages/signaling-types:
     devDependencies:
@@ -192,6 +214,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.0.0
         version: 2.5.5
+      '@repo/signaling-core':
+        specifier: workspace:*
+        version: link:../signaling-core
       '@repo/signaling-types':
         specifier: workspace:*
         version: link:../signaling-types

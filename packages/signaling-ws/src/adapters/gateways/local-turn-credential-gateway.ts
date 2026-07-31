@@ -1,7 +1,7 @@
 import type {
   IceServerConfig,
   ITurnCredentialGateway
-} from '../../domains/turn-credential.js';
+} from '@repo/signaling-core/domains/turn-credential';
 
 /**
  * Local development TURN credential gateway. Returns a STUN-only config

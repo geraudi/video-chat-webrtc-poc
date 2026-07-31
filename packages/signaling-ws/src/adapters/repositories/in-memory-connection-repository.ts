@@ -1,7 +1,7 @@
 import type {
   Connection,
   IConnectionRepository
-} from '../../domains/connection.js';
+} from '@repo/signaling-core/domains/connection';
 
 /**
  * In-memory connection repository for local development and testing
@@ -52,7 +52,7 @@ export class InMemoryConnectionRepository implements IConnectionRepository {
    * for a match). Used by the local server's /health endpoint so tests can
    * synchronize on real matching state.
    */
-  countAvailable(): number {
+  async countAvailable(): Promise<number> {
     let count = 0;
     for (const conn of this.store.values()) {
       if (conn.isAvailable) count++;

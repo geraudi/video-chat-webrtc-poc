@@ -2,7 +2,7 @@ import { type Client, createClient } from '@libsql/client/web';
 import type {
   Connection,
   IConnectionRepository
-} from '../../domains/connection.js';
+} from '@repo/signaling-core/domains/connection';
 
 /**
  * Production database adapter backed by Turso.
@@ -53,5 +53,13 @@ export class TursoConnectionRepository implements IConnectionRepository {
       sql: 'DELETE FROM connection WHERE id = ?',
       args: [connectionId]
     });
+  }
+
+  async countAvailable(): Promise<number> {
+    const result = await this.client.execute({
+      sql: 'SELECT COUNT(*) AS n FROM connection WHERE isAvailable = 1'
+    });
+    const row = result.rows[0];
+    return Number(row?.n ?? 0);
   }
 }

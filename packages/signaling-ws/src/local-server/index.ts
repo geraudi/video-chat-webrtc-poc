@@ -1,14 +1,14 @@
 import http from 'node:http';
+import { ConnectPeer } from '@repo/signaling-core/usecases/connect-peer';
+import { DisconnectPeer } from '@repo/signaling-core/usecases/disconnect-peer';
+import { FindStranger } from '@repo/signaling-core/usecases/find-stranger';
+import { ForwardMessage } from '@repo/signaling-core/usecases/forward-message';
+import { RequestTurnCredentials } from '@repo/signaling-core/usecases/request-turn-credentials';
 import { Actions, type Message } from '@repo/signaling-types/messages';
 import { WebSocket, WebSocketServer } from 'ws';
 import { LocalTurnCredentialGateway } from '../adapters/gateways/local-turn-credential-gateway.js';
 import { LocalWebSocketGateway } from '../adapters/gateways/local-websocket-gateway.js';
 import { InMemoryConnectionRepository } from '../adapters/repositories/in-memory-connection-repository.js';
-import { ConnectPeer } from '../usecases/connect-peer.js';
-import { DisconnectPeer } from '../usecases/disconnect-peer.js';
-import { FindStranger } from '../usecases/find-stranger.js';
-import { ForwardMessage } from '../usecases/forward-message.js';
-import { RequestTurnCredentials } from '../usecases/request-turn-credentials.js';
 
 /**
  * Local WebSocket server using Ports & Adapters architecture.
@@ -52,13 +52,13 @@ class LocalSignalingServer {
     // alongside the WebSocket server. Tests poll GET /health to wait until
     // all peers from the previous test have been cleaned up, preventing
     // ghost-peer cross-matching between tests (which share the server).
-    const server = http.createServer((_req, res) => {
+    const server = http.createServer(async (_req, res) => {
       if (_req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             peers: this.peers.size,
-            available: repo.countAvailable()
+            available: await repo.countAvailable()
           })
         );
         return;

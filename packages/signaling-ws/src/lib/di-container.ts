@@ -1,12 +1,12 @@
+import { MeteredTurnCredentialGateway } from '@repo/signaling-core/adapters/gateways/metered-turn-credential-gateway';
+import { ConnectPeer } from '@repo/signaling-core/usecases/connect-peer';
+import { DisconnectPeer } from '@repo/signaling-core/usecases/disconnect-peer';
+import { FindStranger } from '@repo/signaling-core/usecases/find-stranger';
+import { ForwardMessage } from '@repo/signaling-core/usecases/forward-message';
+import { RequestTurnCredentials } from '@repo/signaling-core/usecases/request-turn-credentials';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { AwsApiGatewaySignalingGateway } from '../adapters/gateways/aws-api-gateway-signaling-gateway.js';
-import { MeteredTurnCredentialGateway } from '../adapters/gateways/metered-turn-credential-gateway.js';
 import { TursoConnectionRepository } from '../adapters/repositories/turso-connection-repository.js';
-import { ConnectPeer } from '../usecases/connect-peer.js';
-import { DisconnectPeer } from '../usecases/disconnect-peer.js';
-import { FindStranger } from '../usecases/find-stranger.js';
-import { ForwardMessage } from '../usecases/forward-message.js';
-import { RequestTurnCredentials } from '../usecases/request-turn-credentials.js';
 
 /**
  * Production composition root.

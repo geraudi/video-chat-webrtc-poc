@@ -2,8 +2,8 @@ import {
   ApiGatewayManagementApiClient,
   PostToConnectionCommand
 } from '@aws-sdk/client-apigatewaymanagementapi';
+import type { ISignalingGateway } from '@repo/signaling-core/domains/signaling';
 import type { Message } from '@repo/signaling-types/messages';
-import type { ISignalingGateway } from '../../domains/signaling.js';
 
 /**
  * Production transport adapter using AWS API Gateway WebSocket

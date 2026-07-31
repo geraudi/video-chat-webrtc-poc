@@ -11,6 +11,7 @@
     "clean": "git clean -xdf .turbo node_modules"
   },
   "dependencies": {
+    "@repo/signaling-core": "workspace:*",
     "@repo/signaling-types": "workspace:*"
   },
   "devDependencies": {

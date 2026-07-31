@@ -1,5 +1,5 @@
+import type { ISignalingGateway } from '@repo/signaling-core/domains/signaling';
 import type { Message } from '@repo/signaling-types/messages';
-import type { ISignalingGateway } from '../../domains/signaling.js';
 
 interface WsAttachment {
   connectionId: string;

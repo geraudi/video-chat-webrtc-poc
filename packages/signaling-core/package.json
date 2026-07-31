@@ -1,0 +1,31 @@
+{
+  "name": "@repo/signaling-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./domains/connection": "./src/domains/connection.ts",
+    "./domains/signaling": "./src/domains/signaling.ts",
+    "./domains/turn-credential": "./src/domains/turn-credential.ts",
+    "./usecases/connect-peer": "./src/usecases/connect-peer.ts",
+    "./usecases/disconnect-peer": "./src/usecases/disconnect-peer.ts",
+    "./usecases/find-stranger": "./src/usecases/find-stranger.ts",
+    "./usecases/forward-message": "./src/usecases/forward-message.ts",
+    "./usecases/request-turn-credentials": "./src/usecases/request-turn-credentials.ts",
+    "./adapters/gateways/metered-turn-credential-gateway": "./src/adapters/gateways/metered-turn-credential-gateway.ts"
+  },
+  "scripts": {
+    "lint": "biome check . --fix",
+    "check-types": "tsc --noEmit",
+    "clean": "git clean -xdf .turbo node_modules"
+  },
+  "dependencies": {
+    "@repo/signaling-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
+  }
+}

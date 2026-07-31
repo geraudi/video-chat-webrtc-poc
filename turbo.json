@@ -9,6 +9,7 @@
     "deploy": {
       "dependsOn": [
         "lint",
+        "@repo/signaling-core#check-types",
         "@repo/signaling-ws#check-types",
         "@repo/signaling-types#build",
         "@repo/signaling-ws#build",
