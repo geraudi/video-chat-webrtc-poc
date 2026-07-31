@@ -10,7 +10,7 @@ Scope: determine whether this orchestration file should remain as-is, be split, 
 - [x] Step 0: Add vitest + turbo test task + smoke tests for signaling-core
 - [x] Step 1: Create packages/webrtc scaffold + migrate TurnCredentialCache
 - [x] Step 2: Move PeerConnectionEngine into packages/webrtc
-- [ ] Step 3: Add packages/chat; move ChatSession + ID generation
+- [x] Step 3: Add packages/chat; move ChatSession + ID generation
 - [ ] Step 4: Slim use-video-chat.ts — instantiate engine+session instead of setters
 - [ ] Step 5: Replace alert() with injected onError callback surfaced as toast
 - [ ] Step 6: Move getUserMedia from mount-effect to onStart-time
