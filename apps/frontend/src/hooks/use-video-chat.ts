@@ -15,12 +15,20 @@ import {
   handleIncomingMessage,
   hangUpCall,
   resetCredentialCache,
+  sendChatMessage,
+  setOnChatMessageCallback,
   setOnCloseVideoCallback,
   setOnTrackCallBack,
   setSignaler,
   setWebcamStream,
   startChat
 } from '../lib/chat.ts';
+
+export interface ChatMessage {
+  content: string;
+  senderId: string;
+  timestamp: number;
+}
 
 const mediaConstraints = {
   audio: true,
@@ -52,6 +60,7 @@ export function useVideoChat() {
   const [stage, setStage] = useState<Stage>('idle');
   const [userId] = useState(() => generateUserId());
   const [strangerId, setStrangerId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(
     config.signalingServer.URL,
@@ -87,6 +96,8 @@ export function useVideoChat() {
       strangerCam.current.srcObject = null;
       strangerCam.current.src = '';
     }
+
+    setMessages([]);
 
     // User explicitly stopped → return to idle, do NOT auto-reconnect.
     if (reason === 'stopping') {
@@ -127,6 +138,13 @@ export function useVideoChat() {
   // on a genuine reconnect (non-OPEN → OPEN), not on every effect re-run.
   const prevReady = useRef(readyState);
 
+  const handleChatMessage = useCallback((content: string, senderId: string) => {
+    setMessages(prev => [
+      ...prev,
+      { content, senderId, timestamp: Date.now() }
+    ]);
+  }, []);
+
   // Initialize websocket connection
   useEffect(() => {
     switch (readyState) {
@@ -134,6 +152,7 @@ export function useVideoChat() {
         setSignaler({ send: sendMessage });
         setOnTrackCallBack(onTrack);
         setOnCloseVideoCallback(onCloseVideo);
+        setOnChatMessageCallback(handleChatMessage);
         // A (re)connection gets a fresh connectionId, so drop any cached
         // credential that may have expired while the socket was down. Guard on
         // a real transition so spurious effect re-runs don't wipe a valid cache.
@@ -191,11 +210,13 @@ export function useVideoChat() {
     stage,
     userId,
     strangerId: strangerId ?? getUserId(),
+    messages,
     // Actions
     actions: {
       onStart,
       onNext,
       onStop
-    }
+    },
+    sendChatMessage
   };
 }

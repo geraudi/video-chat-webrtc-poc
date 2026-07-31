@@ -7,9 +7,11 @@ export default function App() {
     strangerCam,
     isWebSocketConnected,
     stage,
+    messages,
     userId,
     strangerId,
-    actions: { onStart, onNext, onStop }
+    actions: { onStart, onNext, onStop },
+    sendChatMessage
   } = useVideoChat();
 
   return (
@@ -19,11 +21,13 @@ export default function App() {
         strangerCam={strangerCam}
         isWebSocketConnected={isWebSocketConnected}
         stage={stage}
+        messages={messages}
         userId={userId}
         strangerId={strangerId}
         onStart={onStart}
         onNext={onNext}
         onStop={onStop}
+        onSendChat={sendChatMessage}
       />
     </div>
   );

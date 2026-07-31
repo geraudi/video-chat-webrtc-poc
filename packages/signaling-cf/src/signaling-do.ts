@@ -112,7 +112,8 @@ export class SignalingDO extends DurableObject<Env> {
       case Actions.VIDEO_OFFER:
       case Actions.VIDEO_ANSWER:
       case Actions.NEW_ICE_CANDIDATE:
-      case Actions.HANG_UP: {
+      case Actions.HANG_UP:
+      case Actions.CHAT_MESSAGE: {
         const strangerId = (msg as any).strangerId;
         if (strangerId) {
           await this.forwardMessage.execute(connectionId, strangerId, msg);

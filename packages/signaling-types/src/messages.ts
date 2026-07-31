@@ -7,7 +7,8 @@ export enum Actions {
   START = 'start',
   INI_OFFER = 'initOffer',
   REQUEST_TURN_CREDENTIALS = 'requestTurnCredentials',
-  TURN_CREDENTIALS = 'turnCredentials'
+  TURN_CREDENTIALS = 'turnCredentials',
+  CHAT_MESSAGE = 'chatMessage'
 }
 
 /**
@@ -70,6 +71,18 @@ export interface HangUpMessage {
   strangerId: string;
 }
 
+export interface ChatMessageInputMessage extends Message {
+  action: Actions.CHAT_MESSAGE;
+  content: string;
+  strangerId: string;
+}
+
+export interface ChatMessageOutputMessage extends Message {
+  action: Actions.CHAT_MESSAGE;
+  content: string;
+  senderId: string;
+}
+
 export interface RequestTurnCredentialsMessage extends Message {
   action: Actions.REQUEST_TURN_CREDENTIALS;
 }
@@ -86,4 +99,5 @@ export type ReceivedMessage =
   | VideoAnswerInputMessage
   | NewIceCandidateMessage
   | HangUpMessage
-  | TurnCredentialsMessage;
+  | TurnCredentialsMessage
+  | ChatMessageOutputMessage;

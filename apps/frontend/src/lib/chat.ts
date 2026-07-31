@@ -1,5 +1,7 @@
 import {
   Actions,
+  type ChatMessageInputMessage,
+  type ChatMessageOutputMessage,
   type HangUpMessage,
   type IceServer,
   type Message,
@@ -38,6 +40,9 @@ export function getStrangerId(): string | null {
 
 let onTrackCallback: (event: RTCTrackEvent) => void;
 let onCloseVideoCallback: (reason?: 'replacing' | 'stopping') => void;
+let onChatMessageCallback:
+  | ((content: string, senderId: string) => void)
+  | null = null;
 let signaler: ISignaler;
 let role: 'caller' | 'callee';
 
@@ -104,6 +109,12 @@ export function setOnCloseVideoCallback(
   callback: (reason?: 'replacing' | 'stopping') => void
 ) {
   onCloseVideoCallback = callback;
+}
+
+export function setOnChatMessageCallback(
+  callback: ((content: string, senderId: string) => void) | null
+) {
+  onChatMessageCallback = callback;
 }
 
 /**
@@ -241,6 +252,15 @@ export async function handleIncomingMessage(msg: ReceivedMessage) {
       handleHangUpMsg();
       break;
 
+    case Actions.CHAT_MESSAGE: {
+      const chatMsg = msg as ChatMessageOutputMessage;
+      console.log(`---> CHAT from ${chatMsg.senderId}: ${chatMsg.content}`);
+      if (onChatMessageCallback) {
+        onChatMessageCallback(chatMsg.content, chatMsg.senderId);
+      }
+      break;
+    }
+
     case Actions.TURN_CREDENTIALS: {
       // Always warm the cache, even if the resolver already timed out — a
       // late-arriving reply benefits the next match. Resolving a no-longer
@@ -362,6 +382,16 @@ function handleConnectionStateChangeEvent() {
   console.log(
     `[pc] connectionState=${myPeerConnection.connectionState} role=${role} stranger=${strangerId}`
   );
+}
+
+export function sendChatMessage(content: string) {
+  if (!strangerId || !content.trim()) return;
+  const msg: ChatMessageInputMessage = {
+    action: Actions.CHAT_MESSAGE,
+    content: content.trim(),
+    strangerId
+  };
+  sendToServer(msg);
 }
 
 export function startChat() {

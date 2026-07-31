@@ -1,34 +1,61 @@
 import { Send } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import type { ChatMessage } from '../hooks/use-video-chat';
 import { Button } from './ui/button';
 
-/**
- * UI-only chat panel. Messaging is not wired to the backend yet — the send
- * action simply clears the input.
- *
- * State is local to this component on purpose: typing re-renders only the chat
- * panel, never the video tiles or the surrounding layout.
- */
-export function ChatPanel() {
+export interface ChatPanelProps {
+  messages: ChatMessage[];
+  onSend: (content: string) => void;
+  userId: string | null;
+}
+
+export function ChatPanel({ messages, onSend, userId }: ChatPanelProps) {
   const [value, setValue] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const handleSend = (event: React.FormEvent) => {
     event.preventDefault();
     if (!value.trim()) return;
-    // No backend call yet — just clear the field.
+    onSend(value.trim());
     setValue('');
   };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-[20px] border-2 border-foreground bg-background p-3">
       <div
         aria-label="Chat messages"
-        className="flex-1 min-h-0 overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1"
       >
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No messages yet
-        </p>
+        {messages.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No messages yet
+          </p>
+        )}
+        {messages.map((msg, i) => {
+          const isMe = msg.senderId === userId;
+          return (
+            <div
+              key={i}
+              className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-[12px] px-3 py-2 text-sm ${
+                  isMe
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-foreground'
+                }`}
+              >
+                {msg.content}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
       </div>
       <form onSubmit={handleSend} className="mt-3 flex items-center gap-2">
         <input

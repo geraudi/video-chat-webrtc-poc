@@ -1,3 +1,4 @@
+import type { ChatMessage } from '../hooks/use-video-chat';
 import { ChatPanel } from './chat-panel';
 import { ControlBar } from './control-bar';
 import { VideoTile } from './video-tile';
@@ -7,11 +8,13 @@ export interface VideoChatProps {
   strangerCam: React.RefObject<HTMLVideoElement | null>;
   isWebSocketConnected: boolean;
   stage: 'idle' | 'searching' | 'connected';
+  messages: ChatMessage[];
   userId?: string | null;
   strangerId?: string | null;
   onStart: () => void;
   onNext: () => void;
   onStop: () => void;
+  onSendChat: (content: string) => void;
 }
 
 type Stage = VideoChatProps['stage'];
@@ -23,11 +26,13 @@ export function VideoChat({
   strangerCam,
   isWebSocketConnected,
   stage,
+  messages,
   userId,
   strangerId,
   onStart,
   onNext,
-  onStop
+  onStop,
+  onSendChat
 }: VideoChatProps) {
   const statusMessage = getStatusMessage(stage, isWebSocketConnected);
 
@@ -54,7 +59,11 @@ export function VideoChat({
             muted
             className="min-h-[180px]"
           />
-          <ChatPanel />
+          <ChatPanel
+            messages={messages}
+            onSend={onSendChat}
+            userId={userId ?? null}
+          />
           <ControlBar
             stage={stage}
             isWebSocketConnected={isWebSocketConnected}
