@@ -4,15 +4,6 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## HIGH PRIORITY (Fix Before Production)
 
-### 1. TOCTOU Race in Peer Matching (Server)
-- **Location**: `packages/signaling-cf/src/adapters/repositories/do-connection-repository.ts:10-19`, `packages/signaling-core/src/usecases/find-stranger.ts:19-27`
-- **Issue**: `findAvailable` (SELECT) + `setUnavailable` (UPDATE) are two separate operations. Under concurrent START requests, two callers can match with the same available peer.
-- **Fix**: Use atomic UPDATE with RETURNING:
-  ```sql
-  UPDATE connections SET is_available = 0 WHERE id = ? AND is_available = 1 RETURNING id;
-  ```
-  If zero rows returned, peer was already claimed — retry.
-
 ### 2. hangUp Sends Null strangerId
 - **Location**: `packages/webrtc/src/peer-connection-engine.ts:152`
 - **Issue**: `strangerId as string` sends `null` if hangUp called before match. Server cannot route message.
@@ -113,18 +104,18 @@ The following were resolved in the refactor:
 - ✅ Media constraints fixed (no contradictory max < ideal)
 - ✅ Tracks stopped on hangup (transceiver.stop())
 - ✅ ICE candidate queuing with `hasRemoteDescription` guard
+- ✅ TOCTOU race in peer matching (atomic `claimAvailable` via single UPDATE ... RETURNING)
 
 ---
 
 ## Remediation Order
 
-1. **TOCTOU race** (atomic DB update) — blocks correct matching
-2. **hangUp null guard** — prevents malformed messages
-3. **Search timeout** — basic UX requirement
-4. **SDP error propagation** — prevents silent hangs
-5. **WS authentication** — security baseline
-6. **Track replacement API** — enables mute/screen-share
-7. **Binary WS message handling** — robustness
-8. **ICE restart** — network resilience
-9. **Role exposure** — UI completeness
-10. **Constraints, type casts, logging** — quality
+1. **hangUp null guard** — prevents malformed messages
+2. **Search timeout** — basic UX requirement
+3. **SDP error propagation** — prevents silent hangs
+4. **WS authentication** — security baseline
+5. **Track replacement API** — enables mute/screen-share
+6. **Binary WS message handling** — robustness
+7. **ICE restart** — network resilience
+8. **Role exposure** — UI completeness
+9. **Constraints, type casts, logging** — quality

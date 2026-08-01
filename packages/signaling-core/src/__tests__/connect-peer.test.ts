@@ -8,6 +8,7 @@ describe('ConnectPeer', () => {
     const uc = new ConnectPeer({
       create,
       findAvailable: vi.fn(),
+      claimAvailable: vi.fn(),
       setAvailable: vi.fn(),
       setUnavailable: vi.fn(),
       delete: vi.fn(),

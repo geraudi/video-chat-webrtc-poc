@@ -19,6 +19,26 @@ export class DoConnectionRepository implements IConnectionRepository {
     return row ? { id: row.id, isAvailable: Boolean(row.is_available) } : null;
   }
 
+  async claimAvailable(excluding: string): Promise<Connection | null> {
+    const row = this.ctx.storage.sql
+      .exec<{
+        id: string;
+        is_available: number;
+      }>(
+        `UPDATE connections
+         SET is_available = 0
+         WHERE id IN (
+           SELECT id FROM connections
+           WHERE id != ? AND is_available = 1
+           LIMIT 1
+         )
+         RETURNING id, is_available`,
+        excluding
+      )
+      .toArray()[0];
+    return row ? { id: row.id, isAvailable: Boolean(row.is_available) } : null;
+  }
+
   async setAvailable(id: string): Promise<void> {
     this.ctx.storage.sql.exec(
       'UPDATE connections SET is_available = 1 WHERE id = ?',

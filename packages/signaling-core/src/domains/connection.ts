@@ -16,6 +16,13 @@ export interface IConnectionRepository {
   findAvailable(excluding: string): Promise<Connection | null>;
 
   /**
+   * Atomically find and claim an available peer, excluding the given
+   * connection ID. The peer is marked unavailable in the same operation, so
+   * concurrent callers can never be matched with the same peer.
+   */
+  claimAvailable(excluding: string): Promise<Connection | null>;
+
+  /**
    * Mark a connection as available for matching
    */
   setAvailable(id: string): Promise<void>;
