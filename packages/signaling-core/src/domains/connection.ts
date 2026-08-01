@@ -38,6 +38,24 @@ export interface IConnectionRepository {
   create(connectionId: string): Promise<void>;
 
   /**
+   * Pair two connections (set each other as strangers) and mark both
+   * unavailable. Used when a match is established.
+   */
+  pair(a: string, b: string): Promise<void>;
+
+  /**
+   * Return the stranger's connection id for a connection, or null if unpaired.
+   */
+  getStranger(connectionId: string): Promise<string | null>;
+
+  /**
+   * Clear the stranger association of a connection, but only if it still
+   * points at expectedStrangerId. Guarding against the expected value prevents
+   * a stale cleanup from clobbering a newer pairing.
+   */
+  unpair(connectionId: string, expectedStrangerId: string): Promise<void>;
+
+  /**
    * Delete a connection record
    */
   delete(connectionId: string): Promise<void>;

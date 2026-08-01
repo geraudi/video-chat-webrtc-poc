@@ -9,6 +9,7 @@ const { default: useWebSocket = useWebSocketModule } =
 import { ChatSession, generateUserId } from '@repo/chat';
 import {
   defaultMediaConstraints,
+  type MediaConstraints,
   PeerConnectionEngine,
   type PeerConnectionFactory
 } from '@repo/webrtc';
@@ -30,7 +31,10 @@ const browserFactory: PeerConnectionFactory = {
 
 type Stage = 'idle' | 'searching' | 'connected';
 
-export function useVideoChat() {
+export function useVideoChat(
+  options: { mediaConstraints?: MediaConstraints } = {}
+) {
+  const { mediaConstraints = defaultMediaConstraints } = options;
   const localCam = useRef<HTMLVideoElement>(null);
   const strangerCam = useRef<HTMLVideoElement | null>(null);
 
@@ -165,9 +169,8 @@ export function useVideoChat() {
       if (!localCam.current) return;
 
       try {
-        const webcamStream = await navigator.mediaDevices.getUserMedia(
-          defaultMediaConstraints
-        );
+        const webcamStream =
+          await navigator.mediaDevices.getUserMedia(mediaConstraints);
         localCam.current.srcObject = webcamStream;
         webcamStreamRef.current = webcamStream;
         void sessionRef.current?.setLocalStream(webcamStream);

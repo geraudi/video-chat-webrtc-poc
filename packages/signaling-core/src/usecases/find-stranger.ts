@@ -25,6 +25,10 @@ export class FindStranger {
       return { status: 'waiting' };
     }
 
+    // Persist the pairing so the server can notify the remaining peer when one
+    // side disconnects without an explicit hangUp (page refresh/close).
+    await this.repo.pair(connectionId, stranger.id);
+
     // Notify the caller (original requester)
     await this.gateway.send(connectionId, {
       action: Actions.INI_OFFER,

@@ -4,7 +4,7 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## HIGH PRIORITY (Fix Before Production)
 
-### 5. No WebSocket Authentication
+### 1. No WebSocket Authentication
 - **Location**: `packages/signaling-cf/src/signaling-do.ts`
 - **Issue**: Any client can connect to WS and inject messages (forge offers, spoof hangups).
 - **Fix**: Validate JWT/token in `fetch()` before `acceptWebSocket()`. Use Cloudflare Access or custom authorizer.
@@ -13,7 +13,7 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## MEDIUM PRIORITY (Fix for Production Readiness)
 
-### 7. JSON.parse Crash on Binary WebSocket Messages
+### 1. JSON.parse Crash on Binary WebSocket Messages
 - **Location**: `apps/frontend/src/hooks/use-video-chat.ts:180`
 - **Issue**: `JSON.parse(lastMessage?.data ?? '...')` throws if `data` is Blob/ArrayBuffer.
 - **Fix**:
@@ -24,26 +24,11 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
   const message = JSON.parse(data);
   ```
 
-### 8. role Not Exposed to React UI
-- **Location**: `apps/frontend/src/hooks/use-video-chat.ts` return object
-- **Issue**: `ChatSession` exposes `role` getter but hook doesn't return it. UI cannot show caller/callee status.
-- **Fix**: Add `role: sessionRef.current?.role ?? null` to hook return.
-
 ---
 
 ## LOW PRIORITY (Quality Improvements)
 
-### 10. Hardcoded 4:3 Aspect Ratio Only
-- **Location**: `packages/webrtc/src/media-constraints.ts:14`
-- **Issue**: `aspectRatio: { ideal: 1.333333 }` only. Modern phones use 19:9, 20:9. May cause fallback to lower resolution.
-- **Fix**: Use width/height with ideal/max, or make constraints configurable.
-
-### 11. Unsafe `as RTCSessionDescription` Casts
-- **Location**: ~~`packages/webrtc/src/peer-connection-engine.ts:272, 388`~~ → **FIXED**
-- **Issue**: `localDescription as RTCSessionDescription` — TypeScript narrowed but runtime could be null.
-- **Fix**: ✅ `localDescription` captured in a const with a null guard before being sent.
-
-### 12. No Structured Logging/Metrics
+### 1. No Structured Logging/Metrics
 - **Location**: All packages
 - **Issue**: Uses `console` via `Logger` interface. No correlation IDs, log levels, metrics export (OpenTelemetry), or error tracking (Sentry).
 - **Fix**: Implement structured logger with context, add metrics for call duration, ICE state transitions, error rates.
@@ -72,13 +57,12 @@ The following were resolved in the refactor:
 - ✅ TOCTOU race in peer matching (atomic `claimAvailable` via single UPDATE ... RETURNING)
 - ✅ Unsafe `as RTCSessionDescription` casts replaced with null-guarded local description
 - ✅ Track replacement API (`PeerConnectionEngine.replaceTrack` + `ChatSession.replaceTrack`) enabling mute/unmute, camera switch, and screen share without renegotiation. Senders tracked by kind in a `sendersByKind` map so mute (`newTrack = null`) and subsequent unmute both resolve the correct sender; guards kind mismatch, surfaces `replaceTrack` rejections via `onError`. Covered by unit tests (replace audio/video, mute, unmute-after-mute, kind mismatch, no-call, no-sender).
+- ✅ Hardcoded 4:3 aspect ratio replaced with configurable `MediaTrackConstraints` (width/height ideal+max) and injectable via `useVideoChat({ mediaConstraints })`
 
 ---
 
 ## Remediation Order
 
 1. **WS authentication** — security baseline
-2. ~~**Track replacement API** — enables mute/screen-share~~ → **DONE**
-3. **Binary WS message handling** — robustness
-4. **Role exposure** — UI completeness
-5. **Constraints, type casts, logging** — quality
+2. **Binary WS message handling** — robustness
+3. **Type casts, logging** — quality

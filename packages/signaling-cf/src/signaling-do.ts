@@ -35,9 +35,17 @@ export class SignalingDO extends DurableObject<Env> {
       ctx.storage.sql.exec(`
         CREATE TABLE IF NOT EXISTS connections (
           id TEXT PRIMARY KEY,
-          is_available INTEGER DEFAULT 0
+          is_available INTEGER DEFAULT 0,
+          stranger_id TEXT
         )
       `);
+      try {
+        ctx.storage.sql.exec(
+          'ALTER TABLE connections ADD COLUMN stranger_id TEXT'
+        );
+      } catch {
+        // Column already exists on databases created after the migration
+      }
       // Durable Object storage persists across instances and restarts
       // (`wrangler dev` keeps it in .wrangler/state). Any row left over from a
       // previous session belongs to a WebSocket that no longer exists, so purge
@@ -51,7 +59,7 @@ export class SignalingDO extends DurableObject<Env> {
     this.findStranger = new FindStranger(this.repo, this.gateway);
     this.forwardMessage = new ForwardMessage(this.gateway);
     this.connectPeer = new ConnectPeer(this.repo);
-    this.disconnectPeer = new DisconnectPeer(this.repo);
+    this.disconnectPeer = new DisconnectPeer(this.repo, this.gateway);
     this.requestTurnCredentials =
       this.env.METERED_APP_DOMAIN && this.env.METERED_SECRET_KEY
         ? new RequestTurnCredentials(
@@ -112,11 +120,22 @@ export class SignalingDO extends DurableObject<Env> {
       case Actions.VIDEO_OFFER:
       case Actions.VIDEO_ANSWER:
       case Actions.NEW_ICE_CANDIDATE:
-      case Actions.HANG_UP:
       case Actions.CHAT_MESSAGE: {
         const strangerId = (msg as any).strangerId;
         if (strangerId) {
           await this.forwardMessage.execute(connectionId, strangerId, msg);
+        }
+        break;
+      }
+
+      case Actions.HANG_UP: {
+        const strangerId = (msg as any).strangerId;
+        if (strangerId) {
+          await this.forwardMessage.execute(connectionId, strangerId, msg);
+          // Clear the persisted pairing so a later disconnect of either peer
+          // cannot fire a stale HANG_UP or clobber a newer match.
+          await this.repo.unpair(connectionId, strangerId);
+          await this.repo.unpair(strangerId, connectionId);
         }
         break;
       }

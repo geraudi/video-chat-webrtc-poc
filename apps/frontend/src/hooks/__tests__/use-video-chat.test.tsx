@@ -30,7 +30,14 @@ vi.mock('@repo/webrtc', () => ({
     this.events = events;
     this.setLocalStream = vi.fn();
     this.strangerId = null;
-  })
+  }),
+  defaultMediaConstraints: {
+    audio: true,
+    video: {
+      width: { ideal: 1280, max: 1920 },
+      height: { ideal: 720, max: 1080 }
+    }
+  }
 }));
 
 vi.mock('@repo/chat', () => ({

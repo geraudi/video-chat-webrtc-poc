@@ -60,6 +60,44 @@ export class DoConnectionRepository implements IConnectionRepository {
     );
   }
 
+  async pair(a: string, b: string): Promise<void> {
+    this.ctx.storage.sql.exec(
+      `UPDATE connections
+       SET stranger_id = ?, is_available = 0
+       WHERE id = ?`,
+      b,
+      a
+    );
+    this.ctx.storage.sql.exec(
+      `UPDATE connections
+       SET stranger_id = ?, is_available = 0
+       WHERE id = ?`,
+      a,
+      b
+    );
+  }
+
+  async getStranger(connectionId: string): Promise<string | null> {
+    const row = this.ctx.storage.sql
+      .exec<{ stranger_id: string | null }>(
+        'SELECT stranger_id FROM connections WHERE id = ?',
+        connectionId
+      )
+      .toArray()[0];
+    return row?.stranger_id ?? null;
+  }
+
+  async unpair(
+    connectionId: string,
+    expectedStrangerId: string
+  ): Promise<void> {
+    this.ctx.storage.sql.exec(
+      'UPDATE connections SET stranger_id = NULL WHERE id = ? AND stranger_id = ?',
+      connectionId,
+      expectedStrangerId
+    );
+  }
+
   async delete(connectionId: string): Promise<void> {
     this.ctx.storage.sql.exec(
       'DELETE FROM connections WHERE id = ?',

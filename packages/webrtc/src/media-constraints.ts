@@ -1,18 +1,13 @@
 export interface MediaConstraints {
   audio: boolean;
-  video: {
-    aspectRatio: {
-      ideal: number;
-    };
-  };
+  video: MediaTrackConstraints;
 }
 
 export const defaultMediaConstraints: MediaConstraints = {
   audio: true,
   video: {
-    aspectRatio: {
-      ideal: 1.333333
-    }
+    width: { ideal: 1280, max: 1920 },
+    height: { ideal: 720, max: 1080 }
   }
 };
 

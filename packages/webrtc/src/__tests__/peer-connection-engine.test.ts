@@ -5,7 +5,7 @@ import {
   type Message,
   type TurnCredentialsMessage
 } from '@repo/signaling-types/messages';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PeerConnectionEngine,
   type PeerConnectionFactory
@@ -511,6 +511,77 @@ describe('PeerConnectionEngine', () => {
           expect.stringContaining('"action":"videoOffer"')
         )
       );
+    });
+  });
+
+  describe('connectionState hardening', () => {
+    let capturedPc: {
+      connectionState: RTCPeerConnectionState;
+      onconnectionstatechange: (() => void) | null;
+    };
+
+    beforeEach(async () => {
+      vi.useFakeTimers();
+
+      const factoryWithCapture: PeerConnectionFactory = {
+        create: () => {
+          capturedPc =
+            new MockRTCPeerConnectionClass() as unknown as typeof capturedPc;
+          return capturedPc as unknown as RTCPeerConnection;
+        }
+      };
+      engine = new PeerConnectionEngine(factoryWithCapture, signaler, events);
+      engine.setIceServersForTest([{ urls: 'stun:stun.l.google.com:19302' }]);
+
+      await engine.handleIncoming({
+        action: Actions.INI_OFFER,
+        role: 'caller',
+        strangerId: 'stranger-1'
+      });
+      await engine.setLocalStream({
+        getTracks: () => []
+      } as unknown as MediaStream);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const setConnectionState = (state: RTCPeerConnectionState): void => {
+      capturedPc.connectionState = state;
+      capturedPc.onconnectionstatechange?.();
+    };
+
+    it('closes the call immediately when connectionState becomes failed', () => {
+      setConnectionState('failed');
+      expect(mockClose).toHaveBeenCalled();
+      expect(events.onClose).toHaveBeenCalled();
+    });
+
+    it('closes the call after the grace period when the peer stays disconnected', () => {
+      setConnectionState('disconnected');
+      expect(mockClose).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(10_000);
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(events.onClose).toHaveBeenCalled();
+    });
+
+    it('cancels the disconnect timer when the peer reconnects', () => {
+      setConnectionState('disconnected');
+      setConnectionState('connected');
+
+      vi.advanceTimersByTime(30_000);
+
+      expect(mockClose).not.toHaveBeenCalled();
+    });
+
+    it('closes the call when disconnected transitions to failed before the grace period', () => {
+      setConnectionState('disconnected');
+      setConnectionState('failed');
+
+      expect(mockClose).toHaveBeenCalled();
     });
   });
 });

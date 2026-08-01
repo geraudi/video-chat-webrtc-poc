@@ -17,6 +17,9 @@ function makeRepo(
     setUnavailable: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    pair: vi.fn(),
+    getStranger: vi.fn(),
+    unpair: vi.fn(),
     countAvailable: vi.fn(),
     ...overrides
   } as IConnectionRepository;
@@ -39,6 +42,7 @@ describe('FindStranger', () => {
 
     expect(repo.claimAvailable).toHaveBeenCalledWith('conn-A');
     expect(repo.setUnavailable).not.toHaveBeenCalled();
+    expect(repo.pair).toHaveBeenCalledWith('conn-A', 'conn-B');
     expect(result).toEqual({ status: 'matched' });
     expect(gateway.send).toHaveBeenCalledTimes(2);
     expect(gateway.send).toHaveBeenNthCalledWith(

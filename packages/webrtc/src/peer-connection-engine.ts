@@ -51,9 +51,11 @@ export class PeerConnectionEngine {
   private pendingVideoOffer: VideoOfferInputMessage | null = null;
 
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  private disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
   private iceRestartAttempts = 0;
 
   private static readonly MAX_ICE_RESTART_ATTEMPTS = 1;
+  private static readonly DISCONNECTED_GRACE_TIMEOUT_MS = 10_000;
 
   private readonly turnCredentialCache: TurnCredentialCache;
 
@@ -206,6 +208,13 @@ export class PeerConnectionEngine {
     if (this.searchTimeout !== null) {
       clearTimeout(this.searchTimeout);
       this.searchTimeout = null;
+    }
+  }
+
+  private clearDisconnectedTimer(): void {
+    if (this.disconnectedTimer !== null) {
+      clearTimeout(this.disconnectedTimer);
+      this.disconnectedTimer = null;
     }
   }
 
@@ -502,6 +511,27 @@ export class PeerConnectionEngine {
     this.logger.log(
       `[pc] connectionState=${this.myPeerConnection.connectionState} role=${this.role} stranger=${this.strangerId}`
     );
+
+    switch (this.myPeerConnection.connectionState) {
+      case 'connected':
+      case 'connecting':
+        this.clearDisconnectedTimer();
+        break;
+      case 'disconnected':
+        if (this.disconnectedTimer === null) {
+          this.disconnectedTimer = setTimeout(() => {
+            this.disconnectedTimer = null;
+            this.logger.log('Peer stayed disconnected; closing the call');
+            this.closeVideoCall();
+          }, PeerConnectionEngine.DISCONNECTED_GRACE_TIMEOUT_MS);
+        }
+        break;
+      case 'failed':
+      case 'closed':
+        this.clearDisconnectedTimer();
+        this.closeVideoCall();
+        break;
+    }
   }
 
   private async handleNegotiationNeededEvent(): Promise<void> {
@@ -568,6 +598,7 @@ export class PeerConnectionEngine {
     this.logger.log('Closing the call');
 
     this.clearSearchTimeout();
+    this.clearDisconnectedTimer();
 
     if (this.myPeerConnection) {
       this.logger.log('--> Closing the peer connection');
