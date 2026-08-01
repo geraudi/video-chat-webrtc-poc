@@ -300,11 +300,14 @@ export class PeerConnectionEngine {
       await this.myPeerConnection.createAnswer()
     );
 
+    const localDescription = this.myPeerConnection.localDescription;
+    if (!localDescription) return;
+
     this.logger.log(`---> SEND VIDEO ANSWER to ${this.strangerId}`);
     const videoAnswerMessage: VideoAnswerOutputMessage = {
       action: Actions.VIDEO_ANSWER,
       strangerId: this.strangerId,
-      sdp: this.myPeerConnection?.localDescription as RTCSessionDescription
+      sdp: localDescription
     };
     sendToServer(this.signaler, videoAnswerMessage);
   }
@@ -414,12 +417,15 @@ export class PeerConnectionEngine {
       });
       await this.myPeerConnection.setLocalDescription(offer);
 
+      const localDescription = this.myPeerConnection.localDescription;
+      if (!localDescription) return;
+
       this.logger.log(
         `---> SEND VIDEO OFFER (ICE restart) to ${this.strangerId}`
       );
       const videoOfferMessage: VideoOfferOutputMessage = {
         action: Actions.VIDEO_OFFER,
-        sdp: this.myPeerConnection.localDescription as RTCSessionDescription,
+        sdp: localDescription,
         strangerId: this.strangerId
       };
       sendToServer(this.signaler, videoOfferMessage);
@@ -472,10 +478,13 @@ export class PeerConnectionEngine {
 
       await this.myPeerConnection.setLocalDescription(offer);
 
+      const localDescription = this.myPeerConnection.localDescription;
+      if (!localDescription) return;
+
       this.logger.log(`---> SEND VIDEO OFFER to ${this.strangerId}`);
       const videoOfferMessage: VideoOfferOutputMessage = {
         action: Actions.VIDEO_OFFER,
-        sdp: this.myPeerConnection.localDescription as RTCSessionDescription,
+        sdp: localDescription,
         strangerId: this.strangerId
       };
       sendToServer(this.signaler, videoOfferMessage);

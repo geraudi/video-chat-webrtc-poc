@@ -47,9 +47,9 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 - **Fix**: Use width/height with ideal/max, or make constraints configurable.
 
 ### 11. Unsafe `as RTCSessionDescription` Casts
-- **Location**: `packages/webrtc/src/peer-connection-engine.ts:272, 388`
+- **Location**: ~~`packages/webrtc/src/peer-connection-engine.ts:272, 388`~~ → **FIXED**
 - **Issue**: `localDescription as RTCSessionDescription` — TypeScript narrowed but runtime could be null.
-- **Fix**: Add null checks or use `!` with assertion comments.
+- **Fix**: ✅ `localDescription` captured in a const with a null guard before being sent.
 
 ### 12. No Structured Logging/Metrics
 - **Location**: All packages
@@ -78,6 +78,7 @@ The following were resolved in the refactor:
 - ✅ Tracks stopped on hangup (transceiver.stop())
 - ✅ ICE candidate queuing with `hasRemoteDescription` guard
 - ✅ TOCTOU race in peer matching (atomic `claimAvailable` via single UPDATE ... RETURNING)
+- ✅ Unsafe `as RTCSessionDescription` casts replaced with null-guarded local description
 
 ---
 
