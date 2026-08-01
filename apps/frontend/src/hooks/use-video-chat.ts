@@ -8,6 +8,7 @@ const { default: useWebSocket = useWebSocketModule } =
 
 import { ChatSession, generateUserId } from '@repo/chat';
 import { PeerConnectionEngine, type PeerConnectionFactory } from '@repo/webrtc';
+import { toast } from '../components/ui/toast';
 import config from '../config.ts';
 import { makeReactWSSignaler } from '../lib/signaler-adapter.ts';
 
@@ -79,8 +80,13 @@ export function useVideoChat() {
     setStage('searching');
   }, []);
 
-  const onError = useCallback((_err: Error) => {
-    /* surfaced via toast in Step 5 */
+  const onError = useCallback((err: Error) => {
+    toast.add({
+      title: 'Call error',
+      description: err.message,
+      type: 'error',
+      timeout: 5000
+    });
   }, []);
 
   const handleChatMessage = useCallback((content: string, senderId: string) => {

@@ -10,7 +10,9 @@
     "lint": "biome check . --fix",
     "preview": "vite preview",
     "check-types": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
-    "test": "playwright test",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
     "test:ui": "playwright test --ui",
     "clean": "git clean -xdf .turbo node_modules"
   },
@@ -21,7 +23,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@fontsource-variable/figtree": "^5.3.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@hugeicons/core-free-icons": "^4.2.3",
+    "@hugeicons/react": "^1.1.9",
     "@radix-ui/react-slot": "^1.3.0",
     "@repo/chat": "workspace:*",
     "@repo/signaling-types": "workspace:*",
@@ -33,7 +38,7 @@
     "react-dom": "19.2.7",
     "react-use-websocket": "^4.13.0",
     "react-webcam": "^7.2.0",
-    "shadcn": "^4.14.1",
+    "shadcn": "^4.16.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.4.0"
@@ -42,17 +47,21 @@
     "@biomejs/biome": "^2.0.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.1",
     "@types/react": "npm:types-react@19.0.0-rc.1",
     "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
     "@types/webrtc": "^0.0.47",
     "@vitejs/plugin-react": "^6.0.3",
     "autoprefixer": "^10.5.4",
+    "jsdom": "^30.0.1",
     "playwright": "^1.61.1",
     "postcss": "^8.5.21",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "vitest": "4.1.10"
   },
   "overrides": {
     "@types/react": "npm:types-react@rc",
