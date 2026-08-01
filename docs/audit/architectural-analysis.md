@@ -32,12 +32,7 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
   const message = JSON.parse(data);
   ```
 
-### 8. No ICE Restart on Failed/Disconnected
-- **Location**: `packages/webrtc/src/peer-connection-engine.ts:334-336`
-- **Issue**: Only `closed`/`failed` trigger `closeVideoCall()`. No ICE restart attempt on `disconnected` or `failed`.
-- **Fix**: On `failed` with `iceGatheringState === 'complete'`, trigger ICE restart via `createOffer({ iceRestart: true })`.
-
-### 9. role Not Exposed to React UI
+### 8. role Not Exposed to React UI
 - **Location**: `apps/frontend/src/hooks/use-video-chat.ts` return object
 - **Issue**: `ChatSession` exposes `role` getter but hook doesn't return it. UI cannot show caller/callee status.
 - **Fix**: Add `role: sessionRef.current?.role ?? null` to hook return.
@@ -69,6 +64,7 @@ The following were resolved in the refactor:
 - ✅ hangUp null strangerId guard (`PeerConnectionEngine.hangUp` skips send when no match)
 - ✅ setRemoteDescription errors propagate to UI via `events.onError` (`handleVideoAnswerMsg`)
 - ✅ Search timeout (30s) in `PeerConnectionEngine.start()` — emits `onError` + `onClose('timeout')`, hook resets to idle
+- ✅ ICE restart on `disconnected`/`failed` when `iceGatheringState === 'complete'` (`createOffer({ iceRestart: true })`, counter reset on reconnect/close, closes after max attempts)
 - ✅ TURN server support via Metered (dynamic credential fetching)
 - ✅ PeerConnection cleanup on unmount/reconnect (`dispose()` pattern)
 - ✅ Complete PC state monitoring (5 event handlers)
@@ -90,6 +86,5 @@ The following were resolved in the refactor:
 1. **WS authentication** — security baseline
 2. **Track replacement API** — enables mute/screen-share
 3. **Binary WS message handling** — robustness
-4. **ICE restart** — network resilience
-5. **Role exposure** — UI completeness
-6. **Constraints, type casts, logging** — quality
+4. **Role exposure** — UI completeness
+5. **Constraints, type casts, logging** — quality

@@ -49,6 +49,9 @@ export class PeerConnectionEngine {
   private pendingVideoOffer: VideoOfferInputMessage | null = null;
 
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  private iceRestartAttempts = 0;
+
+  private static readonly MAX_ICE_RESTART_ATTEMPTS = 1;
 
   private readonly turnCredentialCache: TurnCredentialCache;
 
@@ -365,11 +368,64 @@ export class PeerConnectionEngine {
       `[pc] iceConnectionState=${this.myPeerConnection.iceConnectionState} role=${this.role} stranger=${this.strangerId}`
     );
 
+    const canRestartIce =
+      this.myPeerConnection.iceGatheringState === 'complete' &&
+      this.iceRestartAttempts < PeerConnectionEngine.MAX_ICE_RESTART_ATTEMPTS;
+
     switch (this.myPeerConnection.iceConnectionState) {
-      case 'closed':
+      case 'connected':
+      case 'completed':
+        this.iceRestartAttempts = 0;
+        break;
+      case 'disconnected':
+        if (canRestartIce) {
+          void this.tryIceRestart();
+        }
+        break;
       case 'failed':
+        if (canRestartIce) {
+          void this.tryIceRestart();
+        } else {
+          this.closeVideoCall();
+        }
+        break;
+      case 'closed':
         this.closeVideoCall();
         break;
+    }
+  }
+
+  private async tryIceRestart(): Promise<void> {
+    if (
+      !this.myPeerConnection ||
+      !this.strangerId ||
+      this.myPeerConnection.signalingState !== 'stable' ||
+      this.iceRestartAttempts >= PeerConnectionEngine.MAX_ICE_RESTART_ATTEMPTS
+    ) {
+      return;
+    }
+
+    this.iceRestartAttempts++;
+    this.logger.log(`--> ICE restart attempt ${this.iceRestartAttempts}`);
+
+    try {
+      const offer = await this.myPeerConnection.createOffer({
+        iceRestart: true
+      });
+      await this.myPeerConnection.setLocalDescription(offer);
+
+      this.logger.log(
+        `---> SEND VIDEO OFFER (ICE restart) to ${this.strangerId}`
+      );
+      const videoOfferMessage: VideoOfferOutputMessage = {
+        action: Actions.VIDEO_OFFER,
+        sdp: this.myPeerConnection.localDescription as RTCSessionDescription,
+        strangerId: this.strangerId
+      };
+      sendToServer(this.signaler, videoOfferMessage);
+    } catch (err) {
+      this.logger.error(err);
+      this.closeVideoCall();
     }
   }
 
@@ -490,6 +546,7 @@ export class PeerConnectionEngine {
 
     this.pendingCallerMatch = false;
     this.pendingVideoOffer = null;
+    this.iceRestartAttempts = 0;
 
     this.strangerId = null;
     this.events.onStrangerIdChange?.(null);

@@ -297,4 +297,95 @@ describe('PeerConnectionEngine', () => {
       expect(engine.getStrangerId()).toBeNull();
     });
   });
+
+  describe('ICE restart on failed/disconnected', () => {
+    let capturedPc: {
+      iceConnectionState: RTCIceConnectionState;
+      iceGatheringState: RTCIceGatheringState;
+      signalingState: RTCSignalingState;
+      oniceconnectionstatechange: (() => void) | null;
+    };
+
+    beforeEach(async () => {
+      const factoryWithCapture: PeerConnectionFactory = {
+        create: () => {
+          capturedPc =
+            new MockRTCPeerConnectionClass() as unknown as typeof capturedPc;
+          return capturedPc as unknown as RTCPeerConnection;
+        }
+      };
+      engine = new PeerConnectionEngine(factoryWithCapture, signaler, events);
+      engine.setIceServersForTest([{ urls: 'stun:stun.l.google.com:19302' }]);
+
+      await engine.handleIncoming({
+        action: Actions.INI_OFFER,
+        role: 'caller',
+        strangerId: 'stranger-1'
+      });
+      await engine.setLocalStream({
+        getTracks: () => []
+      } as unknown as MediaStream);
+    });
+
+    const setIceState = (
+      state: RTCIceConnectionState,
+      gathering: RTCIceGatheringState = 'complete'
+    ): void => {
+      capturedPc.iceConnectionState = state;
+      capturedPc.iceGatheringState = gathering;
+      capturedPc.oniceconnectionstatechange?.();
+    };
+
+    it('closes the call on failed when never connected (gathering incomplete)', () => {
+      setIceState('failed', 'new');
+      expect(mockClose).toHaveBeenCalled();
+      expect(signaler.send).not.toHaveBeenCalledWith(
+        expect.stringContaining('"action":"videoOffer"')
+      );
+    });
+
+    it('sends an ICE restart offer on failed when gathering is complete', async () => {
+      setIceState('failed', 'complete');
+      expect(mockClose).not.toHaveBeenCalled();
+      await vi.waitFor(() =>
+        expect(signaler.send).toHaveBeenCalledWith(
+          expect.stringContaining('"action":"videoOffer"')
+        )
+      );
+      expect(signaler.send).toHaveBeenCalledWith(
+        expect.stringContaining('"strangerId":"stranger-1"')
+      );
+    });
+
+    it('sends an ICE restart offer on disconnected', async () => {
+      setIceState('disconnected', 'complete');
+      expect(mockClose).not.toHaveBeenCalled();
+      await vi.waitFor(() =>
+        expect(signaler.send).toHaveBeenCalledWith(
+          expect.stringContaining('"action":"videoOffer"')
+        )
+      );
+    });
+
+    it('closes the call when the connection fails again after a restart attempt', () => {
+      setIceState('failed', 'complete');
+      expect(mockClose).not.toHaveBeenCalled();
+
+      setIceState('failed', 'complete');
+      expect(mockClose).toHaveBeenCalled();
+    });
+
+    it('resets the restart counter once the connection reconnects', async () => {
+      setIceState('failed', 'complete');
+      setIceState('connected', 'complete');
+      setIceState('failed', 'complete');
+
+      expect(mockClose).not.toHaveBeenCalled();
+      await vi.waitFor(() =>
+        expect(signaler.send).toHaveBeenCalledWith(
+          expect.stringContaining('"action":"videoOffer"')
+        )
+      );
+    });
+  });
 });
