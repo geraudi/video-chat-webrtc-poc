@@ -61,22 +61,25 @@ export function useVideoChat() {
     setStrangerId(strangerId);
   }, []);
 
-  const onClose = useCallback((reason?: 'replacing' | 'stopping') => {
-    if (strangerCam.current) {
-      strangerCam.current.srcObject = null;
-      strangerCam.current.src = '';
-    }
+  const onClose = useCallback(
+    (reason?: 'replacing' | 'stopping' | 'timeout') => {
+      if (strangerCam.current) {
+        strangerCam.current.srcObject = null;
+        strangerCam.current.src = '';
+      }
 
-    setMessages([]);
+      setMessages([]);
 
-    if (reason === 'stopping') {
-      setStage('idle');
-      return;
-    }
+      if (reason === 'stopping' || reason === 'timeout') {
+        setStage('idle');
+        return;
+      }
 
-    sessionRef.current?.start();
-    setStage('searching');
-  }, []);
+      sessionRef.current?.start();
+      setStage('searching');
+    },
+    []
+  );
 
   const onError = useCallback((err: Error) => {
     toast.add({

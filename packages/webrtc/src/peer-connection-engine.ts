@@ -28,11 +28,13 @@ export interface Logger {
 
 export interface PeerConnectionEvents {
   onRemoteTrack?: (stream: MediaStream) => void;
-  onClose?: (reason?: 'replacing' | 'stopping') => void;
+  onClose?: (reason?: 'replacing' | 'stopping' | 'timeout') => void;
   onIceServersExpired?: () => void;
   onError?: (err: Error) => void;
   onStrangerIdChange?: (strangerId: string | null) => void;
 }
+
+export const DEFAULT_SEARCH_TIMEOUT_MS = 30_000;
 
 export class PeerConnectionEngine {
   private myPeerConnection: RTCPeerConnection | null = null;
@@ -46,13 +48,16 @@ export class PeerConnectionEngine {
   private pendingCallerMatch = false;
   private pendingVideoOffer: VideoOfferInputMessage | null = null;
 
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
   private readonly turnCredentialCache: TurnCredentialCache;
 
   constructor(
     private readonly factory: PeerConnectionFactory,
     private readonly signaler: Signaler,
     private readonly events: PeerConnectionEvents,
-    private readonly logger: Logger = console
+    private readonly logger: Logger = console,
+    private readonly searchTimeoutMs: number = DEFAULT_SEARCH_TIMEOUT_MS
   ) {
     this.turnCredentialCache = new TurnCredentialCache(signaler, () => {
       this.events.onIceServersExpired?.();
@@ -93,6 +98,7 @@ export class PeerConnectionEngine {
       case Actions.INI_OFFER: {
         const initOffer = msg as InitOfferMessage;
         this.role = initOffer.role;
+        this.clearSearchTimeout();
         if (initOffer.role === 'caller') {
           this.strangerId = initOffer.strangerId;
           this.events.onStrangerIdChange?.(this.strangerId);
@@ -141,9 +147,28 @@ export class PeerConnectionEngine {
       action: Actions.START
     };
     sendToServer(this.signaler, startMessage);
+
+    this.clearSearchTimeout();
+    this.searchTimeout = setTimeout(() => {
+      this.searchTimeout = null;
+      this.logger.log('No match found; search timed out');
+      this.events.onError?.(new Error('No stranger found. Please try again.'));
+      const hadPeerConnection = this.myPeerConnection !== null;
+      this.closeVideoCall('timeout');
+      if (!hadPeerConnection) {
+        this.events.onClose?.('timeout');
+      }
+    }, this.searchTimeoutMs);
   }
 
-  hangUp(reason?: 'replacing' | 'stopping'): void {
+  private clearSearchTimeout(): void {
+    if (this.searchTimeout !== null) {
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = null;
+    }
+  }
+
+  hangUp(reason?: 'replacing' | 'stopping' | 'timeout'): void {
     const currentStrangerId = this.strangerId;
 
     if (!currentStrangerId) {
@@ -226,6 +251,7 @@ export class PeerConnectionEngine {
   ): Promise<void> {
     this.strangerId = msg.senderId;
     this.events.onStrangerIdChange?.(this.strangerId);
+    this.clearSearchTimeout();
 
     this.logger.log(`RECEIVE VIDEO OFFER from ${this.strangerId}`);
 
@@ -434,8 +460,10 @@ export class PeerConnectionEngine {
     this.closeVideoCall();
   }
 
-  private closeVideoCall(reason?: 'replacing' | 'stopping'): void {
+  private closeVideoCall(reason?: 'replacing' | 'stopping' | 'timeout'): void {
     this.logger.log('Closing the call');
+
+    this.clearSearchTimeout();
 
     if (this.myPeerConnection) {
       this.logger.log('--> Closing the peer connection');

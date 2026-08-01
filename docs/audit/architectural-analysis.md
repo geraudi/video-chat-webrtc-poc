@@ -4,11 +4,6 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## HIGH PRIORITY (Fix Before Production)
 
-### 4. No Search Timeout
-- **Location**: `apps/frontend/src/hooks/use-video-chat.ts`, `packages/webrtc/src/peer-connection-engine.ts`
-- **Issue**: User clicks "Start" → sends START → if no peer available, waits indefinitely with no feedback.
-- **Fix**: Add 30s timeout in `PeerConnectionEngine.start()` or hook, emit error via `onError`.
-
 ### 5. No WebSocket Authentication
 - **Location**: `packages/signaling-cf/src/signaling-do.ts`
 - **Issue**: Any client can connect to WS and inject messages (forge offers, spoof hangups).
@@ -73,6 +68,7 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 The following were resolved in the refactor:
 - ✅ hangUp null strangerId guard (`PeerConnectionEngine.hangUp` skips send when no match)
 - ✅ setRemoteDescription errors propagate to UI via `events.onError` (`handleVideoAnswerMsg`)
+- ✅ Search timeout (30s) in `PeerConnectionEngine.start()` — emits `onError` + `onClose('timeout')`, hook resets to idle
 - ✅ TURN server support via Metered (dynamic credential fetching)
 - ✅ PeerConnection cleanup on unmount/reconnect (`dispose()` pattern)
 - ✅ Complete PC state monitoring (5 event handlers)
@@ -91,10 +87,9 @@ The following were resolved in the refactor:
 
 ## Remediation Order
 
-1. **Search timeout** — basic UX requirement
-2. **WS authentication** — security baseline
-3. **Track replacement API** — enables mute/screen-share
-4. **Binary WS message handling** — robustness
-5. **ICE restart** — network resilience
-6. **Role exposure** — UI completeness
-7. **Constraints, type casts, logging** — quality
+1. **WS authentication** — security baseline
+2. **Track replacement API** — enables mute/screen-share
+3. **Binary WS message handling** — robustness
+4. **ICE restart** — network resilience
+5. **Role exposure** — UI completeness
+6. **Constraints, type casts, logging** — quality

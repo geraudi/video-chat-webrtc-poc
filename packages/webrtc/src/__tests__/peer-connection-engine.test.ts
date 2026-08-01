@@ -96,7 +96,7 @@ describe('PeerConnectionEngine', () => {
   let signaler: Signaler;
   let events: {
     onRemoteTrack?: (stream: MediaStream) => void;
-    onClose?: (reason?: 'replacing' | 'stopping') => void;
+    onClose?: (reason?: 'replacing' | 'stopping' | 'timeout') => void;
     onError?: (err: Error) => void;
   };
   let engine: PeerConnectionEngine;
@@ -121,6 +121,64 @@ describe('PeerConnectionEngine', () => {
       expect(signaler.send).toHaveBeenCalledWith(
         JSON.stringify({ action: Actions.START })
       );
+      engine.dispose();
+    });
+
+    it('emits error and closes call when no match is found', async () => {
+      vi.useFakeTimers();
+      engine = new PeerConnectionEngine(
+        factory,
+        signaler,
+        events,
+        console,
+        1_000
+      );
+      engine.setIceServersForTest([{ urls: 'stun:stun.l.google.com:19302' }]);
+
+      await engine.start();
+
+      expect(events.onClose).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1_000);
+
+      expect(events.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'No stranger found. Please try again.'
+        })
+      );
+      expect(events.onClose).toHaveBeenCalledWith('timeout');
+      expect(engine.getStrangerId()).toBeNull();
+
+      vi.useRealTimers();
+    });
+
+    it('cancels the search timeout once a match arrives', async () => {
+      vi.useFakeTimers();
+      engine = new PeerConnectionEngine(
+        factory,
+        signaler,
+        events,
+        console,
+        1_000
+      );
+      engine.setIceServersForTest([{ urls: 'stun:stun.l.google.com:19302' }]);
+
+      await engine.start();
+
+      const initOffer: InitOfferMessage = {
+        action: Actions.INI_OFFER,
+        role: 'caller',
+        strangerId: 'stranger-1'
+      };
+      await engine.handleIncoming(initOffer);
+
+      vi.advanceTimersByTime(1_000);
+
+      expect(events.onError).not.toHaveBeenCalled();
+      expect(events.onClose).not.toHaveBeenCalled();
+      expect(engine.getStrangerId()).toBe('stranger-1');
+
+      vi.useRealTimers();
     });
   });
 
