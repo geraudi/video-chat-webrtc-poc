@@ -146,10 +146,16 @@ export class PeerConnectionEngine {
   hangUp(reason?: 'replacing' | 'stopping'): void {
     const currentStrangerId = this.strangerId;
 
+    if (!currentStrangerId) {
+      this.logger.log('No stranger matched; skipping HANG_UP send');
+      this.closeVideoCall(reason);
+      return;
+    }
+
     this.logger.log(`---> SEND HANG_UP to ${currentStrangerId}`);
     const hangUpMessage: HangUpMessage = {
       action: Actions.HANG_UP,
-      strangerId: currentStrangerId as string
+      strangerId: currentStrangerId
     };
     sendToServer(this.signaler, hangUpMessage);
 

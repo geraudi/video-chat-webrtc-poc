@@ -4,14 +4,6 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## HIGH PRIORITY (Fix Before Production)
 
-### 2. hangUp Sends Null strangerId
-- **Location**: `packages/webrtc/src/peer-connection-engine.ts:152`
-- **Issue**: `strangerId as string` sends `null` if hangUp called before match. Server cannot route message.
-- **Fix**: Guard before sending:
-  ```typescript
-  if (!currentStrangerId) return;
-  ```
-
 ### 3. setRemoteDescription Errors Not Propagated to UI
 - **Location**: `packages/webrtc/src/peer-connection-engine.ts:284-286`
 - **Issue**: `.catch(this.logger.error)` swallows error. Call hangs silently with no user feedback.
@@ -92,6 +84,7 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 ## FIXED (Reference — No Action Needed)
 
 The following were resolved in the refactor:
+- ✅ hangUp null strangerId guard (`PeerConnectionEngine.hangUp` skips send when no match)
 - ✅ TURN server support via Metered (dynamic credential fetching)
 - ✅ PeerConnection cleanup on unmount/reconnect (`dispose()` pattern)
 - ✅ Complete PC state monitoring (5 event handlers)
@@ -110,12 +103,11 @@ The following were resolved in the refactor:
 
 ## Remediation Order
 
-1. **hangUp null guard** — prevents malformed messages
-2. **Search timeout** — basic UX requirement
-3. **SDP error propagation** — prevents silent hangs
-4. **WS authentication** — security baseline
-5. **Track replacement API** — enables mute/screen-share
-6. **Binary WS message handling** — robustness
-7. **ICE restart** — network resilience
-8. **Role exposure** — UI completeness
-9. **Constraints, type casts, logging** — quality
+1. **Search timeout** — basic UX requirement
+2. **SDP error propagation** — prevents silent hangs
+3. **WS authentication** — security baseline
+4. **Track replacement API** — enables mute/screen-share
+5. **Binary WS message handling** — robustness
+6. **ICE restart** — network resilience
+7. **Role exposure** — UI completeness
+8. **Constraints, type casts, logging** — quality
