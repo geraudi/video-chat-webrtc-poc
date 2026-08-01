@@ -13,8 +13,14 @@ import {
 import { type Signaler } from '../types';
 
 const mockAddTrack = vi.fn();
-const mockCreateOffer = vi.fn();
-const mockCreateAnswer = vi.fn();
+const mockCreateOffer = vi.fn().mockResolvedValue({
+  type: 'offer',
+  sdp: 'mock-sdp'
+});
+const mockCreateAnswer = vi.fn().mockResolvedValue({
+  type: 'answer',
+  sdp: 'mock-sdp'
+});
 const mockSetLocalDescription = vi.fn().mockResolvedValue(undefined);
 const mockSetRemoteDescription = vi.fn().mockResolvedValue(undefined);
 const mockAddIceCandidate = vi.fn().mockResolvedValue(undefined);
@@ -83,7 +89,10 @@ beforeEach(() => {
     addTrack = mockAddTrack;
     createOffer = mockCreateOffer;
     createAnswer = mockCreateAnswer;
-    setLocalDescription = mockSetLocalDescription;
+    setLocalDescription = vi.fn((desc: RTCSessionDescription) => {
+      this.localDescription = desc;
+      return mockSetLocalDescription(desc);
+    });
     setRemoteDescription = mockSetRemoteDescription;
     addIceCandidate = mockAddIceCandidate;
     close = mockClose;
@@ -295,6 +304,122 @@ describe('PeerConnectionEngine', () => {
 
       expect(mockClose).toHaveBeenCalled();
       expect(engine.getStrangerId()).toBeNull();
+    });
+  });
+
+  describe('replaceTrack', () => {
+    const audioTrack = { id: 'mic-1', kind: 'audio' } as MediaStreamTrack;
+    const videoTrack = { id: 'cam-1', kind: 'video' } as MediaStreamTrack;
+    const replacementAudioTrack = {
+      id: 'mic-2',
+      kind: 'audio'
+    } as MediaStreamTrack;
+    const replacementVideoTrack = {
+      id: 'cam-2',
+      kind: 'video'
+    } as MediaStreamTrack;
+    const audioSender = {
+      track: audioTrack,
+      replaceTrack: vi.fn().mockResolvedValue(undefined)
+    };
+    const videoSender = {
+      track: videoTrack,
+      replaceTrack: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const setUpCall = async (tracks: MediaStreamTrack[]): Promise<void> => {
+      const initOffer: InitOfferMessage = {
+        action: Actions.INI_OFFER,
+        role: 'caller',
+        strangerId: 'stranger-1'
+      };
+      await engine.handleIncoming(initOffer);
+      await engine.setLocalStream({
+        getTracks: () => tracks
+      } as unknown as MediaStream);
+    };
+
+    beforeEach(() => {
+      mockAddTrack.mockImplementation((track: MediaStreamTrack) =>
+        track.kind === 'audio' ? audioSender : videoSender
+      );
+      audioSender.replaceTrack.mockClear();
+      videoSender.replaceTrack.mockClear();
+    });
+
+    it('replaces the audio track on the matching sender', async () => {
+      await setUpCall([audioTrack, videoTrack]);
+
+      await engine.replaceTrack('audio', replacementAudioTrack);
+
+      expect(audioSender.replaceTrack).toHaveBeenCalledWith(
+        replacementAudioTrack
+      );
+      expect(videoSender.replaceTrack).not.toHaveBeenCalled();
+    });
+
+    it('replaces the video track on the matching sender', async () => {
+      await setUpCall([audioTrack, videoTrack]);
+
+      await engine.replaceTrack('video', replacementVideoTrack);
+
+      expect(videoSender.replaceTrack).toHaveBeenCalledWith(
+        replacementVideoTrack
+      );
+      expect(audioSender.replaceTrack).not.toHaveBeenCalled();
+    });
+
+    it('mutes a track by replacing it with null', async () => {
+      await setUpCall([audioTrack, videoTrack]);
+
+      await engine.replaceTrack('audio', null);
+
+      expect(audioSender.replaceTrack).toHaveBeenCalledWith(null);
+    });
+
+    it('unmutes after muting (sender lookup survives a null track)', async () => {
+      await setUpCall([audioTrack, videoTrack]);
+
+      await engine.replaceTrack('audio', null);
+      await engine.replaceTrack('audio', audioTrack);
+
+      expect(audioSender.replaceTrack).toHaveBeenNthCalledWith(1, null);
+      expect(audioSender.replaceTrack).toHaveBeenNthCalledWith(2, audioTrack);
+    });
+
+    it('emits onError when the new track kind does not match', async () => {
+      await setUpCall([audioTrack, videoTrack]);
+
+      await engine.replaceTrack('audio', replacementVideoTrack);
+
+      expect(audioSender.replaceTrack).not.toHaveBeenCalled();
+      expect(events.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Cannot replace audio track with a video track.'
+        })
+      );
+    });
+
+    it('emits onError when there is no active peer connection', async () => {
+      await engine.replaceTrack('audio', audioTrack);
+
+      expect(events.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'No active call to replace a track on.'
+        })
+      );
+    });
+
+    it('emits onError when no sender matches the requested kind', async () => {
+      await setUpCall([audioTrack]);
+
+      await engine.replaceTrack('video', replacementVideoTrack);
+
+      expect(events.onError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'No active video track to replace.'
+        })
+      );
     });
   });
 

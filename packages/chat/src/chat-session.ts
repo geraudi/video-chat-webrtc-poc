@@ -82,6 +82,13 @@ export class ChatSession {
     this.engine.hangUp(reason);
   }
 
+  replaceTrack(
+    kind: 'audio' | 'video',
+    track: MediaStreamTrack | null
+  ): Promise<void> {
+    return this.engine.replaceTrack(kind, track);
+  }
+
   dispose(): void {
     this.engine.dispose();
   }

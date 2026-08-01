@@ -13,14 +13,6 @@ The codebase has been significantly refactored (AWS Lambda → Cloudflare Worker
 
 ## MEDIUM PRIORITY (Fix for Production Readiness)
 
-### 6. No Track Replacement API (Mute, Screen Share)
-- **Location**: `packages/webrtc/src/peer-connection-engine.ts`
-- **Issue**: No public `replaceTrack()` method. Cannot implement mute/unmute, camera switch, or screen sharing without full renegotiation.
-- **Fix**: Add method:
-  ```typescript
-  async replaceTrack(kind: 'audio' | 'video', newTrack: MediaStreamTrack): Promise<void>
-  ```
-
 ### 7. JSON.parse Crash on Binary WebSocket Messages
 - **Location**: `apps/frontend/src/hooks/use-video-chat.ts:180`
 - **Issue**: `JSON.parse(lastMessage?.data ?? '...')` throws if `data` is Blob/ArrayBuffer.
@@ -79,13 +71,14 @@ The following were resolved in the refactor:
 - ✅ ICE candidate queuing with `hasRemoteDescription` guard
 - ✅ TOCTOU race in peer matching (atomic `claimAvailable` via single UPDATE ... RETURNING)
 - ✅ Unsafe `as RTCSessionDescription` casts replaced with null-guarded local description
+- ✅ Track replacement API (`PeerConnectionEngine.replaceTrack` + `ChatSession.replaceTrack`) enabling mute/unmute, camera switch, and screen share without renegotiation. Senders tracked by kind in a `sendersByKind` map so mute (`newTrack = null`) and subsequent unmute both resolve the correct sender; guards kind mismatch, surfaces `replaceTrack` rejections via `onError`. Covered by unit tests (replace audio/video, mute, unmute-after-mute, kind mismatch, no-call, no-sender).
 
 ---
 
 ## Remediation Order
 
 1. **WS authentication** — security baseline
-2. **Track replacement API** — enables mute/screen-share
+2. ~~**Track replacement API** — enables mute/screen-share~~ → **DONE**
 3. **Binary WS message handling** — robustness
 4. **Role exposure** — UI completeness
 5. **Constraints, type casts, logging** — quality

@@ -42,6 +42,8 @@ export class PeerConnectionEngine {
   private strangerId: string | null = null;
   private role: 'caller' | 'callee' | null = null;
 
+  private sendersByKind: Partial<Record<'audio' | 'video', RTCRtpSender>> = {};
+
   private remoteIceCandidates: RTCIceCandidate[] = [];
   private hasRemoteDescription = false;
 
@@ -78,6 +80,42 @@ export class PeerConnectionEngine {
 
   getRole(): 'caller' | 'callee' | null {
     return this.role;
+  }
+
+  async replaceTrack(
+    kind: 'audio' | 'video',
+    newTrack: MediaStreamTrack | null
+  ): Promise<void> {
+    if (!this.myPeerConnection) {
+      this.events.onError?.(new Error('No active call to replace a track on.'));
+      return;
+    }
+
+    const sender = this.sendersByKind[kind];
+
+    if (!sender) {
+      this.events.onError?.(new Error(`No active ${kind} track to replace.`));
+      return;
+    }
+
+    if (newTrack && newTrack.kind !== kind) {
+      this.events.onError?.(
+        new Error(`Cannot replace ${kind} track with a ${newTrack.kind} track.`)
+      );
+      return;
+    }
+
+    this.logger.log(
+      `Replacing ${kind} track with ${
+        newTrack ? `track ${newTrack.id}` : 'null (muted)'
+      }`
+    );
+
+    try {
+      await sender.replaceTrack(newTrack);
+    } catch (err) {
+      this.events.onError?.(err as Error);
+    }
   }
 
   async setLocalStream(stream: MediaStream): Promise<void> {
@@ -236,17 +274,22 @@ export class PeerConnectionEngine {
     await this.createPeerConnection();
 
     try {
-      this.webcamStream
-        .getTracks()
-        .forEach(track =>
-          this.myPeerConnection?.addTrack(
-            track,
-            this.webcamStream as MediaStream
-          )
-        );
+      this.addLocalTracks();
     } catch (err) {
       this.handleGetUserMediaError(err as Error);
     }
+  }
+
+  private addLocalTracks(): void {
+    this.webcamStream?.getTracks().forEach(track => {
+      const sender = this.myPeerConnection?.addTrack(
+        track,
+        this.webcamStream as MediaStream
+      );
+      if (sender) {
+        this.sendersByKind[track.kind as 'audio' | 'video'] = sender;
+      }
+    });
   }
 
   private async handleVideoOfferMsg(
@@ -290,11 +333,7 @@ export class PeerConnectionEngine {
       );
     }
 
-    this.webcamStream
-      .getTracks()
-      .forEach(track =>
-        this.myPeerConnection?.addTrack(track, this.webcamStream as MediaStream)
-      );
+    this.addLocalTracks();
 
     await this.myPeerConnection.setLocalDescription(
       await this.myPeerConnection.createAnswer()
@@ -549,6 +588,7 @@ export class PeerConnectionEngine {
       this.myPeerConnection = null;
       this.hasRemoteDescription = false;
       this.remoteIceCandidates = [];
+      this.sendersByKind = {};
 
       this.events.onClose?.(reason);
     }
