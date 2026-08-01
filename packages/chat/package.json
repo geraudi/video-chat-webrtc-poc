@@ -10,13 +10,15 @@
     "build": "tsc",
     "check-types": "tsc --noEmit",
     "lint": "biome check . --fix",
+    "test": "vitest run",
     "clean": "git clean -xdf .turbo node_modules"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^26.1.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@repo/signaling-types": "workspace:*",

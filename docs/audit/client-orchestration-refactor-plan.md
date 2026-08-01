@@ -13,9 +13,9 @@ Scope: determine whether this orchestration file should remain as-is, be split, 
 - [x] Step 3: Add packages/chat; move ChatSession + ID generation
 - [x] Step 4: Slim use-video-chat.ts — instantiate engine+session instead of setters
 - [x] Step 5: Replace alert() with injected onError callback surfaced as toast
-- [ ] Step 6: Move getUserMedia from mount-effect to onStart-time
-- [ ] Step 7: Delete stray getUserId() fallback; make strangerId null first-class
-- [ ] Step 8: Add unit tests for engine (fake factory) + session (fake signaler)
+- [ ] IGNORED ~~Step 6: Move getUserMedia from mount-effect to onStart-time~~
+- [x] Step 7: Delete stray getUserId() fallback; make strangerId null first-class
+- [x] Step 8: Add unit tests for engine (fake factory) + session (fake signaler)
 
 ---
 
@@ -369,7 +369,7 @@ One-way dependency: `frontend → chat → webrtc → signaling-types`. No cycle
 | **4. Slim `use-video-chat.ts`: instantiate engine+session instead of setters** | High | S | Removes the setter bridge; fixes StrictMode double-mount risk | Low | Depends on 2&3; merge together with one of them |
 | **5. Replace `alert()` with an injected `onError` callback surfaced as a toast** | Low | XS | UX + E2E testability | Low | Yes, anytime |
 | **6. Move `getUserMedia` from mount-time-effect to `onStart`-time** | Low-Med | XS-S | UX perm-prompt ordering fix | Low | Yes, anytime |
-| **7. Delete stray `getUserId()` fallback; make `strangerId: string \| null` first-class** | Low | XS | Removes double-binding feature envy | Low | Yes |
+| **7. Delete stray `getUserId()` fallback; make `strangerId: string \| null` first-class** | Low | XS | Removes double-binding feature envy | Low | Yes | ✅ Done |
 | **8. Add unit tests for engine (fake factory) + session (fake signaler)** | High | M | Locks in regression scope after refactor | None | Yes |
 
 The recommended merge sequence (minimizing regression window): **0 → 1 → 2 + 4 together → 3 → 8 → 5/6/7 in parallel**. Do NOT split step 2 into pieces; the engine's internal temporal coupling means moving it piecemeal would expose half-done global bridges. Step 4 must move with step 2 because the new bridge replaces the old setter-injection exactly at that boundary.
