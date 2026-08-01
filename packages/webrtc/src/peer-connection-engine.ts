@@ -1,3 +1,4 @@
+import type { IceServer } from '@repo/signaling-types/messages';
 import {
   Actions,
   type HangUpMessage,
@@ -11,6 +12,7 @@ import {
   type VideoOfferInputMessage,
   type VideoOfferOutputMessage
 } from '@repo/signaling-types/messages';
+import { mapGetUserMediaError } from './media-constraints';
 import { TurnCredentialCache } from './turn-credential-cache';
 import { type Signaler, sendToServer } from './types';
 
@@ -29,6 +31,7 @@ export interface PeerConnectionEvents {
   onClose?: (reason?: 'replacing' | 'stopping') => void;
   onIceServersExpired?: () => void;
   onError?: (err: Error) => void;
+  onStrangerIdChange?: (strangerId: string | null) => void;
 }
 
 export class PeerConnectionEngine {
@@ -51,7 +54,14 @@ export class PeerConnectionEngine {
     private readonly events: PeerConnectionEvents,
     private readonly logger: Logger = console
   ) {
-    this.turnCredentialCache = new TurnCredentialCache(signaler);
+    this.turnCredentialCache = new TurnCredentialCache(signaler, () => {
+      this.events.onIceServersExpired?.();
+    });
+  }
+
+  // Test helper to inject pre-fetched ICE servers
+  setIceServersForTest(servers: IceServer[]): void {
+    this.turnCredentialCache.setIceServersForTest(servers);
   }
 
   getStrangerId(): string | null {
@@ -85,6 +95,7 @@ export class PeerConnectionEngine {
         this.role = initOffer.role;
         if (initOffer.role === 'caller') {
           this.strangerId = initOffer.strangerId;
+          this.events.onStrangerIdChange?.(this.strangerId);
           await this.invite();
         }
         break;
@@ -208,6 +219,7 @@ export class PeerConnectionEngine {
     msg: VideoOfferInputMessage
   ): Promise<void> {
     this.strangerId = msg.senderId;
+    this.events.onStrangerIdChange?.(this.strangerId);
 
     this.logger.log(`RECEIVE VIDEO OFFER from ${this.strangerId}`);
 
@@ -386,7 +398,9 @@ export class PeerConnectionEngine {
 
   private handleGetUserMediaError(e: Error): void {
     this.logger.error(e);
-    switch (e.name) {
+    const mappedError = mapGetUserMediaError(e);
+
+    switch (mappedError.type) {
       case 'NotFoundError':
         this.events.onError?.(
           new Error(
@@ -394,8 +408,8 @@ export class PeerConnectionEngine {
           )
         );
         break;
-      case 'SecurityError':
       case 'PermissionDeniedError':
+        // User denied permission - don't show error toast, just close
         break;
       default:
         this.events.onError?.(
@@ -441,5 +455,6 @@ export class PeerConnectionEngine {
     this.pendingVideoOffer = null;
 
     this.strangerId = null;
+    this.events.onStrangerIdChange?.(null);
   }
 }

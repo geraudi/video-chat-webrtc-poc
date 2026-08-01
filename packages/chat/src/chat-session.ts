@@ -21,7 +21,7 @@ export class ChatSession {
 
   constructor(
     private readonly signaler: Signaler,
-    readonly engine: PeerConnectionEngine,
+    private readonly engine: PeerConnectionEngine,
     private readonly events: ChatSessionEvents = {},
     private readonly logger: Logger = console
   ) {
@@ -84,5 +84,9 @@ export class ChatSession {
 
   dispose(): void {
     this.engine.dispose();
+  }
+
+  setLocalStream(stream: MediaStream): Promise<void> {
+    return this.engine.setLocalStream(stream);
   }
 }

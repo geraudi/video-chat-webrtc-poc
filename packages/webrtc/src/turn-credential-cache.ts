@@ -17,7 +17,10 @@ export class TurnCredentialCache {
   private credentialRejecter: ((error: Error) => void) | null = null;
   private credentialTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private readonly signaler: Signaler) {}
+  constructor(
+    private readonly signaler: Signaler,
+    private readonly onClear?: () => void
+  ) {}
 
   private resolveCredentialRequest(servers: IceServer[]): void {
     if (this.credentialTimer) {
@@ -86,5 +89,12 @@ export class TurnCredentialCache {
   clearCredentialCache(): void {
     this.cachedIceServers = null;
     this.cachedExpiresAt = 0;
+    this.onClear?.();
+  }
+
+  // Test helper to bypass network request
+  setIceServersForTest(servers: IceServer[]): void {
+    this.cachedIceServers = servers;
+    this.cachedExpiresAt = Date.now() + 3600_000; // 1 hour from now
   }
 }

@@ -58,7 +58,7 @@ The orchestration file is `apps/frontend/src/hooks/use-video-chat.ts` (222 LOC),
 | R5 SDP negotiation | **packages/webrtc** | Same: pure negotiation logic. |
 | R6 ICE buffering | **packages/webrtc** | Belongs with R4/R5 in the engine. |
 | R7 Message router | **packages/chat** | Decodes `ReceivedMessage` (`@repo/signaling-types`) — the message types are already shared; the dispatcher should be too. |
-| R8 Media acquisition | **apps/frontend** (the `getUserMedia` call + `<video>` refs) ; **packages/webrtc** (`mediaConstraints` const + `handleGetUserMediaError` taxonomy) | The DOM/permission call is browser-only; the constraints/error categories are portable. |
+| R8 Media acquisition | **apps/frontend** (the `getUserMedia` call + `<video>` refs) ; **packages/webrtc** (`mediaConstraints` const + `handleGetUserMediaError` taxonomy) | The DOM/permission call is browser-only; the constraints/error categories are portable. (Moved to onStart: **IGNORED**) |
 | R9 `<video>` srcObject | **apps/frontend** | Genuine view concern. |
 | R10 Chat state | UI list → **apps/frontend**; frame assembly (`CHAT_MESSAGE` msg) + inbound handling → **packages/chat** | UI list is React; the protocol frame is already typed in `@repo/signaling-types` (`ChatMessageInputMessage`/`OutputMessage`) and reusable. |
 | R11 ID generation | **packages/chat** (as session state, not module singletons) | Identity is call/session state. Today it's a hidden global — fix it by lifting to the session. |
@@ -226,7 +226,7 @@ Proposed changes:
 | **SDP negotiation** | Skips glare handling by relying on `role==='callee'` (`chat.ts:280` early-out in `handleNegotiationNeededEvent`). Defensible because server assigns roles (`@repo/signaling-core` `FindStranger`). | Acceptable, but **fragile: relies on a server invariant.** | Add an assertion-aware comment; consider `perfectNegotiation` only if server stops assigning roles. Don't add it speculatively. |
 | **Media tracks** | `webcamStream.getTracks().forEach(t => pc.addTrack(t, stream))` repeated in `invite` (`:422-427`) AND `handleVideoOfferMsg` (`:472-476`) — dead classic addTrack (no `addTransceiver`). | Acceptable for POC; no renegotiation today. Fine to keep. | After extraction, this lives in one place inside the engine. Pure code-motion. |
 | **Browser APIs** | `new RTCPeerConnection`, `new RTCSessionDescription`, `new RTCIceCandidate`, `navigator.mediaDevices.getUserMedia`, `alert`. Four hard browser coupling points. | Problem for the RN/desktop client said to be coming. | Inject ctor via `PeerConnectionFactory`; reuse `RTCSessionDescriptionInit` (DOM `RTCSessionDescription` isn't needed if you pass plain SDP objects). |
-| **Permissions** | `getUserMedia` triggered in a `useEffect` on mount (`use-video-chat.ts:174-190`) — prompt fires before user clicks Start. UX smell. | UX bug | Move `getUserMedia` to `onStart`; show explicit permissions UI. (App-side change; beyond architecture scope but should be noted.) |
+| **Permissions** | `getUserMedia` triggered in a `useEffect` on mount (`use-video-chat.ts:174-190`) — prompt fires before user clicks Start. UX smell. | UX bug | Move `getUserMedia` to `onStart`; show explicit permissions UI. (**IGNORED** — not fixing) |
 | **Renegotiation** | None supported — match-locked to single transceiver | Out of scope; leave it. | — |
 | **Signaling boundaries** | Engine speaks `ReceivedMessage` directly; no transport interface — engine knows too much about the wire. | Needs `Signaler` port | Promote `ISignaler` to `packages/webrtc`. |
 
@@ -269,7 +269,7 @@ Proposed changes:
 | 4 | **Temporal coupling** | `hangUpCall` reads `strangerId` before `closeVideoCall` nulls it (`chat.ts:526-537`); the `pending*` flush order depends on `setWebcamStream` arriving after message handling | **High** |
 | 5 | **Long Class (simulated)** | The quasi-class in `chat.ts` has ~30 functions mutating shared state | **High** |
 | 6 | **Shotgun surgery (the bridge)** | Adding a new callback type requires edits in `chat.ts` (declare global + setter) *and* `use-video-chat.ts` (import + import + setter call *and* consumer state) | **Medium** |
-| 7 | **Hidden side effect** | `getUserMedia` on mount (`use-video-chat.ts:174-190`) — permission prompt before user intent | **Medium** |
+| 7 | **Hidden side effect** | `getUserMedia` on mount (`use-video-chat.ts:174-190`) — permission prompt before user intent | **Medium (IGNORED)** |
 | 8 | **Feature envy** | `use-video-chat.ts:193-204` polls `getStrangerId()` from chat.ts to re-mirror into React state | **Medium** |
 | 9 | **Large mutable state** | The TURN cache block alone has 6 mutable fields (`chat.ts:63-68`) | **Medium** |
 | 10 | **`alert()` blocking main thread** | `chat.ts:417, 504, 514` — also masks test harnesses | **Medium** |
@@ -368,11 +368,11 @@ One-way dependency: `frontend → chat → webrtc → signaling-types`. No cycle
 | **3. Add `packages/chat`; move `ChatSession` + ID generation** | Med | M | Removes the rest of `chat.ts`; closes the protocol/engine split | Medium (router behavior changes) | Yes |
 | **4. Slim `use-video-chat.ts`: instantiate engine+session instead of setters** | High | S | Removes the setter bridge; fixes StrictMode double-mount risk | Low | Depends on 2&3; merge together with one of them |
 | **5. Replace `alert()` with an injected `onError` callback surfaced as a toast** | Low | XS | UX + E2E testability | Low | Yes, anytime |
-| **6. Move `getUserMedia` from mount-time-effect to `onStart`-time** | Low-Med | XS-S | UX perm-prompt ordering fix | Low | Yes, anytime |
+| **6. Move `getUserMedia` from mount-time-effect to `onStart`-time** | Low-Med | XS-S | UX perm-prompt ordering fix | Low | **IGNORED** |
 | **7. Delete stray `getUserId()` fallback; make `strangerId: string \| null` first-class** | Low | XS | Removes double-binding feature envy | Low | Yes | ✅ Done |
 | **8. Add unit tests for engine (fake factory) + session (fake signaler)** | High | M | Locks in regression scope after refactor | None | Yes |
 
-The recommended merge sequence (minimizing regression window): **0 → 1 → 2 + 4 together → 3 → 8 → 5/6/7 in parallel**. Do NOT split step 2 into pieces; the engine's internal temporal coupling means moving it piecemeal would expose half-done global bridges. Step 4 must move with step 2 because the new bridge replaces the old setter-injection exactly at that boundary.
+The recommended merge sequence (minimizing regression window): **0 → 1 → 2 + 4 together → 3 → 8 → 5/7 in parallel**. Do NOT split step 2 into pieces; the engine's internal temporal coupling means moving it piecemeal would expose half-done global bridges. Step 4 must move with step 2 because the new bridge replaces the old setter-injection exactly at that boundary.
 
 ## 9. Risks
 - **Regression risk concentrated in step 2** — the engine's ICE buffer + pending-match race + `hasRemoteDescription` flag rely on subtle ordering. Mitigation: keep Playwright E2E green on each PR; mirror field-for-field in the new class (pure code-motion first, refactor second).

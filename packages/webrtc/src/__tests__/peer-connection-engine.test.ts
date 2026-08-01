@@ -1,3 +1,4 @@
+import type { IceServer } from '@repo/signaling-types/messages';
 import {
   Actions,
   type InitOfferMessage,
@@ -110,12 +111,8 @@ describe('PeerConnectionEngine', () => {
     };
     engine = new PeerConnectionEngine(factory, signaler, events);
 
-    // Mock the TurnCredentialCache to return STUN fallback immediately
-    // This avoids the 8-second timeout waiting for TURN credentials
-    const turnCache = (engine as any).turnCredentialCache;
-    vi.spyOn(turnCache, 'getIceServers').mockResolvedValue([
-      { urls: 'stun:stun.l.google.com:19302' }
-    ]);
+    // Use test helper to set ICE servers and avoid 8-second TURN timeout
+    engine.setIceServersForTest([{ urls: 'stun:stun.l.google.com:19302' }]);
   });
 
   describe('start', () => {
@@ -209,7 +206,9 @@ describe('PeerConnectionEngine', () => {
       await engine.handleIncoming(initOffer);
 
       // Set local stream to create peer connection
-      await engine.setLocalStream({ getTracks: () => [] } as unknown as MediaStream);
+      await engine.setLocalStream({
+        getTracks: () => []
+      } as unknown as MediaStream);
 
       engine.hangUp('stopping');
 
@@ -230,7 +229,9 @@ describe('PeerConnectionEngine', () => {
       await engine.handleIncoming(initOffer);
 
       // Set local stream to create peer connection
-      await engine.setLocalStream({ getTracks: () => [] } as unknown as MediaStream);
+      await engine.setLocalStream({
+        getTracks: () => []
+      } as unknown as MediaStream);
 
       engine.dispose();
 

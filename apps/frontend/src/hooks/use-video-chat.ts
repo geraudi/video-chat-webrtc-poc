@@ -7,7 +7,11 @@ const { default: useWebSocket = useWebSocketModule } =
   };
 
 import { ChatSession, generateUserId } from '@repo/chat';
-import { PeerConnectionEngine, type PeerConnectionFactory } from '@repo/webrtc';
+import {
+  defaultMediaConstraints,
+  PeerConnectionEngine,
+  type PeerConnectionFactory
+} from '@repo/webrtc';
 import { toast } from '../components/ui/toast';
 import config from '../config.ts';
 import { makeReactWSSignaler } from '../lib/signaler-adapter.ts';
@@ -17,15 +21,6 @@ export interface ChatMessage {
   senderId: string;
   timestamp: number;
 }
-
-const mediaConstraints = {
-  audio: true,
-  video: {
-    aspectRatio: {
-      ideal: 1.333333
-    }
-  }
-};
 
 const browserFactory: PeerConnectionFactory = {
   create(config: RTCConfiguration): RTCPeerConnection {
@@ -62,6 +57,10 @@ export function useVideoChat() {
     }
   }, []);
 
+  const onStrangerIdChange = useCallback((strangerId: string | null) => {
+    setStrangerId(strangerId);
+  }, []);
+
   const onClose = useCallback((reason?: 'replacing' | 'stopping') => {
     if (strangerCam.current) {
       strangerCam.current.srcObject = null;
@@ -69,7 +68,6 @@ export function useVideoChat() {
     }
 
     setMessages([]);
-    setStrangerId(null);
 
     if (reason === 'stopping') {
       setStage('idle');
@@ -128,7 +126,8 @@ export function useVideoChat() {
         const engine = new PeerConnectionEngine(browserFactory, signaler, {
           onRemoteTrack,
           onClose,
-          onError
+          onError,
+          onStrangerIdChange
         });
         const session = new ChatSession(signaler, engine, {
           onChatMessage: handleChatMessage
@@ -163,11 +162,12 @@ export function useVideoChat() {
       if (!localCam.current) return;
 
       try {
-        const webcamStream =
-          await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        const webcamStream = await navigator.mediaDevices.getUserMedia(
+          defaultMediaConstraints
+        );
         localCam.current.srcObject = webcamStream;
         webcamStreamRef.current = webcamStream;
-        void sessionRef.current?.engine.setLocalStream(webcamStream);
+        void sessionRef.current?.setLocalStream(webcamStream);
       } catch (_err) {
         return;
       }
@@ -183,10 +183,6 @@ export function useVideoChat() {
 
     void sessionRef.current.handleIncomingMessage(message);
   }, [lastMessage]);
-
-  useEffect(() => {
-    setStrangerId(sessionRef.current?.strangerId ?? null);
-  }, [stage]);
 
   useEffect(() => {
     return () => {

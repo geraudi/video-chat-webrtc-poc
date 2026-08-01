@@ -1,4 +1,11 @@
 export {
+  defaultMediaConstraints,
+  type GetUserMediaError,
+  GetUserMediaErrorType,
+  type MediaConstraints,
+  mapGetUserMediaError
+} from './media-constraints';
+export {
   type Logger,
   PeerConnectionEngine,
   type PeerConnectionEvents,
