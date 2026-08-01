@@ -287,9 +287,12 @@ export class PeerConnectionEngine {
 
     this.logger.log('RECEIVE VIDEO ANSWER');
     const desc = new RTCSessionDescription(msg.sdp);
-    await this.myPeerConnection
-      .setRemoteDescription(desc)
-      .catch(this.logger.error);
+    try {
+      await this.myPeerConnection.setRemoteDescription(desc);
+    } catch (err) {
+      this.events.onError?.(err as Error);
+      throw err;
+    }
     this.hasRemoteDescription = true;
   }
 
