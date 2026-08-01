@@ -1,8 +1,6 @@
 import {
   Actions,
-  type ChatMessageOutputMessage,
   type HangUpMessage,
-  type IceServer,
   type InitOfferMessage,
   type Message,
   type NewIceCandidateMessage,

@@ -21,7 +21,7 @@ export class ChatSession {
 
   constructor(
     private readonly signaler: Signaler,
-    private readonly engine: PeerConnectionEngine,
+    readonly engine: PeerConnectionEngine,
     private readonly events: ChatSessionEvents = {},
     private readonly logger: Logger = console
   ) {

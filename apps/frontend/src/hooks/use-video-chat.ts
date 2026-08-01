@@ -6,23 +6,10 @@ const { default: useWebSocket = useWebSocketModule } =
     default: typeof useWebSocketModule;
   };
 
+import { ChatSession, generateUserId } from '@repo/chat';
+import { PeerConnectionEngine, type PeerConnectionFactory } from '@repo/webrtc';
 import config from '../config.ts';
-import {
-  generateUserId,
-  getStrangerId,
-  getUserId,
-  handleGetUserMediaError,
-  handleIncomingMessage,
-  hangUpCall,
-  resetCredentialCache,
-  sendChatMessage,
-  setOnChatMessageCallback,
-  setOnCloseVideoCallback,
-  setOnTrackCallBack,
-  setSignaler,
-  setWebcamStream,
-  startChat
-} from '../lib/chat.ts';
+import { makeReactWSSignaler } from '../lib/signaler-adapter.ts';
 
 export interface ChatMessage {
   content: string;
@@ -39,16 +26,12 @@ const mediaConstraints = {
   }
 };
 
-/**
- * Single source of truth for the UI state machine.
- *
- * Stage transitions:
- * - idle → searching (onStart)
- * - searching → connected (peer video received)
- * - connected → searching (onNext / re-matching)
- * - connected → idle (onStop / hangup)
- * - searching → idle (optional, if connection fails before match)
- */
+const browserFactory: PeerConnectionFactory = {
+  create(config: RTCConfiguration): RTCPeerConnection {
+    return new RTCPeerConnection(config);
+  }
+};
+
 type Stage = 'idle' | 'searching' | 'connected';
 
 export function useVideoChat() {
@@ -56,11 +39,13 @@ export function useVideoChat() {
   const strangerCam = useRef<HTMLVideoElement | null>(null);
 
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
-  // Single source of truth for button state
   const [stage, setStage] = useState<Stage>('idle');
-  const [userId] = useState(() => generateUserId());
+  const [userId, setUserId] = useState(() => generateUserId());
   const [strangerId, setStrangerId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const sessionRef = useRef<ChatSession | null>(null);
+  const webcamStreamRef = useRef<MediaStream | null>(null);
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(
     config.signalingServer.URL,
@@ -69,74 +54,34 @@ export function useVideoChat() {
     }
   );
 
-  // Callback when a peer's video track is received. Memoized so the readyState
-  // effect below doesn't re-run (and wipe the credential cache) on every render.
-  const onTrack = useCallback((event: RTCTrackEvent) => {
-    event.track.onunmute = () => {
-      if (strangerCam.current?.srcObject) {
-        return;
-      }
-      if (strangerCam.current) {
-        strangerCam.current.srcObject = event.streams[0];
-        // Chat connected → transition to connected stage
-        setStage('connected');
-      }
-    };
-    // Also set the stream immediately for headless testing (onunmute may not fire in mocks)
+  const onRemoteTrack = useCallback((stream: MediaStream) => {
     if (strangerCam.current && !strangerCam.current.srcObject) {
-      strangerCam.current.srcObject = event.streams[0];
-      // Chat connected → transition to connected stage
+      strangerCam.current.srcObject = stream;
       setStage('connected');
     }
   }, []);
 
-  // Callback when video call ends (peer disconnected or hangup)
-  const onCloseVideo = useCallback((reason?: 'replacing' | 'stopping') => {
+  const onClose = useCallback((reason?: 'replacing' | 'stopping') => {
     if (strangerCam.current) {
       strangerCam.current.srcObject = null;
       strangerCam.current.src = '';
     }
 
     setMessages([]);
+    setStrangerId(null);
 
-    // User explicitly stopped → return to idle, do NOT auto-reconnect.
     if (reason === 'stopping') {
       setStage('idle');
       return;
     }
 
-    // Call ended → peer disconnected, transition to searching for new peer
-    startChat();
+    sessionRef.current?.start();
     setStage('searching');
   }, []);
 
-  // Start button clicked: make this peer available for matching
-  const onStart = useCallback(() => {
-    startChat();
-    setStage('searching');
+  const onError = useCallback((_err: Error) => {
+    /* surfaced via toast in Step 5 */
   }, []);
-
-  // Next button clicked: hang up current chat and immediately search for a new peer
-  const onNext = useCallback(() => {
-    // Disconnect from current chat first
-    if (strangerCam.current) {
-      strangerCam.current.srcObject = null;
-      strangerCam.current.src = '';
-    }
-
-    // Hang up via signaling (will trigger onCloseVideo → startChat for auto-reconnect)
-    hangUpCall();
-  }, []);
-
-  // Stop button clicked: disconnect the current call and return to idle.
-  // Passing 'stopping' so onCloseVideo returns to idle instead of re-searching.
-  const onStop = useCallback(() => {
-    hangUpCall('stopping');
-  }, []);
-
-  // Tracks the previous readyState so the credential cache is invalidated only
-  // on a genuine reconnect (non-OPEN → OPEN), not on every effect re-run.
-  const prevReady = useRef(readyState);
 
   const handleChatMessage = useCallback((content: string, senderId: string) => {
     setMessages(prev => [
@@ -145,32 +90,68 @@ export function useVideoChat() {
     ]);
   }, []);
 
-  // Initialize websocket connection
+  const onStart = useCallback(() => {
+    sessionRef.current?.start();
+    setStage('searching');
+  }, []);
+
+  const onNext = useCallback(() => {
+    if (strangerCam.current) {
+      strangerCam.current.srcObject = null;
+      strangerCam.current.src = '';
+    }
+
+    sessionRef.current?.hangUp();
+  }, []);
+
+  const onStop = useCallback(() => {
+    sessionRef.current?.hangUp('stopping');
+  }, []);
+
+  const sendChatMessageFn = useCallback((content: string) => {
+    sessionRef.current?.sendChatMessage(content);
+  }, []);
+
   useEffect(() => {
     switch (readyState) {
       case ReadyState.OPEN: {
-        setSignaler({ send: sendMessage });
-        setOnTrackCallBack(onTrack);
-        setOnCloseVideoCallback(onCloseVideo);
-        setOnChatMessageCallback(handleChatMessage);
-        // A (re)connection gets a fresh connectionId, so drop any cached
-        // credential that may have expired while the socket was down. Guard on
-        // a real transition so spurious effect re-runs don't wipe a valid cache.
-        const justOpened = prevReady.current !== ReadyState.OPEN;
-        if (justOpened) {
-          resetCredentialCache();
+        const signaler = makeReactWSSignaler(sendMessage);
+
+        sessionRef.current?.dispose();
+
+        const engine = new PeerConnectionEngine(browserFactory, signaler, {
+          onRemoteTrack,
+          onClose,
+          onError
+        });
+        const session = new ChatSession(signaler, engine, {
+          onChatMessage: handleChatMessage
+        });
+        sessionRef.current = session;
+        setUserId(session.userId);
+
+        if (webcamStreamRef.current) {
+          void engine.setLocalStream(webcamStreamRef.current);
         }
+
         setIsWebSocketConnected(true);
         break;
       }
       case ReadyState.CLOSED:
+        sessionRef.current?.dispose();
+        sessionRef.current = null;
         setIsWebSocketConnected(false);
         break;
     }
-    prevReady.current = readyState;
-  }, [onCloseVideo, readyState, sendMessage, onTrack]);
+  }, [
+    readyState,
+    sendMessage,
+    onRemoteTrack,
+    onClose,
+    onError,
+    handleChatMessage
+  ]);
 
-  // Initialize webcam
   useEffect(() => {
     const getUserMedia = async () => {
       if (!localCam.current) return;
@@ -179,9 +160,9 @@ export function useVideoChat() {
         const webcamStream =
           await navigator.mediaDevices.getUserMedia(mediaConstraints);
         localCam.current.srcObject = webcamStream;
-        setWebcamStream(webcamStream);
-      } catch (err) {
-        handleGetUserMediaError(err as Error);
+        webcamStreamRef.current = webcamStream;
+        void sessionRef.current?.engine.setLocalStream(webcamStream);
+      } catch (_err) {
         return;
       }
     };
@@ -189,19 +170,23 @@ export function useVideoChat() {
     void getUserMedia();
   }, []);
 
-  // Update strangerId when it changes (from chat module)
-  useEffect(() => {
-    setStrangerId(getStrangerId());
-  }, [stage]);
-
-  // Handle receive message from websocket
   useEffect(() => {
     const message = JSON.parse(lastMessage?.data ?? '{"action": "none"}');
 
-    if (!lastMessage || !localCam.current) return;
+    if (!lastMessage || !sessionRef.current) return;
 
-    void handleIncomingMessage(message);
+    void sessionRef.current.handleIncomingMessage(message);
   }, [lastMessage]);
+
+  useEffect(() => {
+    setStrangerId(sessionRef.current?.strangerId ?? null);
+  }, [stage]);
+
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.dispose();
+    };
+  }, []);
 
   return {
     localCam,
@@ -209,14 +194,13 @@ export function useVideoChat() {
     isWebSocketConnected,
     stage,
     userId,
-    strangerId: strangerId ?? getUserId(),
+    strangerId,
     messages,
-    // Actions
     actions: {
       onStart,
       onNext,
       onStop
     },
-    sendChatMessage
+    sendChatMessage: sendChatMessageFn
   };
 }
